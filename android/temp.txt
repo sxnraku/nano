@@ -1,0 +1,83 @@
+﻿
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+.\gradlew.bat : 
+At line:1 char:13
++ cd android; 
+.\gradlew.bat 
+assembleDebug > 
+build_apk_log.txt 2>&1
++             ~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (:String) [],    
+ RemoteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+FAILURE: Build failed 
+with an exception.
+
+* What went wrong:
+Could not determine 
+the dependencies of 
+task ':capacitor-filesy
+stem:bundleLibCompileTo
+JarDebug'.
+> Could not create 
+task ':capacitor-filesy
+stem:compileDebugJavaWi
+thJavac'.
+   > Failed to 
+calculate the value of 
+task ':capacitor-filesy
+stem:compileDebugJavaWi
+thJavac' property 
+'javaCompiler'.
+      > Cannot find a 
+Java installation on 
+your machine (Windows 
+11 10.0 amd64) 
+matching: 
+{languageVersion=21, 
+vendor=any vendor, impl
+ementation=vendor-speci
+fic, nativeImageCapable
+=false}. Toolchain 
+download repositories 
+have not been 
+configured.
+
+* Try:
+> Learn more about 
+toolchain 
+auto-detection and 
+auto-provisioning at ht
+tps://docs.gradle.org/8
+.14.3/userguide/toolcha
+ins.html#sec:auto_detec
+tion.
+> Learn more about 
+toolchain repositories 
+at https://docs.gradle.
+org/8.14.3/userguide/to
+olchains.html#sub:downl
+oad_repositories.
+> Run with 
+--stacktrace option to 
+get the stack trace.
+> Run with --info or 
+--debug option to get 
+more log output.
+> Run with --scan to 
+get full insights.
+> Get more help at http
+s://help.gradle.org.
+
+BUILD FAILED in 5s

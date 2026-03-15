@@ -1,0 +1,119 @@
+
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Task :app:signingReport
+Variant: debug
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+Variant: release
+Config: null
+Store: null
+Alias: null
+----------
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-camera:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-community-admob:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-cordova-android-plugins:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-filesystem:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :capacitor-haptics:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+> Task :codetrix-studio-capacitor-google-auth:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\renat\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 6A:03:8A:AB:8E:E6:80:47:AA:59:1E:23:39:2D:AF:2D
+SHA1: EA:B5:92:22:B1:54:A1:82:8A:EC:47:A8:E3:07:FE:88:DC:C1:4B:C8
+SHA-256: AB:0F:54:82:54:00:EA:C9:15:D7:FE:B0:6F:29:08:35:50:37:3A:A5:34:4B:9F:8D:8E:1B:60:70:AC:33:25:4A
+Valid until: domingo, 11 de julho de 2055
+----------
+
+[Incubating] Problems report is available at: file:///C:/Users/renat/Downloads/remix_-nanoverse_-conflito-de-gangues/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2s
+8 actionable tasks: 8 executed

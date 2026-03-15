@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user stats for the leaderboard.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID from Auth" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "User avatar URL" },
+        "totalWins": { "type": "number", "description": "Total battles won" },
+        "highestCombo": { "type": "number", "description": "Highest combo achieved" },
+        "collectionSize": { "type": "number", "description": "Number of warriors collected" },
+        "lastActive": { "type": "string", "format": "date-time", "description": "Last active timestamp" }
+      },
+      "required": ["uid", "displayName", "totalWins", "collectionSize"]
+    },
+    "Challenge": {
+      "title": "Battle Challenge",
+      "description": "A snapshot of a warrior shared for async battles.",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string", "description": "User ID of the creator" },
+        "creatorName": { "type": "string", "description": "Name of the creator" },
+        "warriorData": { "type": "string", "description": "JSON stringified WarriorData" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "wins": { "type": "number", "description": "Number of times this challenge won" },
+        "losses": { "type": "number", "description": "Number of times this challenge lost" }
+      },
+      "required": ["creatorId", "warriorData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles for leaderboard"
+    },
+    "challenges/{challengeId}": {
+      "schema": "Challenge",
+      "description": "Shared battle challenges"
+    }
+  }
+}

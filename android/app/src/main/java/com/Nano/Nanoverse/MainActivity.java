@@ -1,0 +1,5 @@
+package com.Nano.Nanoverse;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "898996940292",
+    "project_id": "nanoverse-589fa",
+    "storage_bucket": "nanoverse-589fa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:898996940292:android:0f3e5d64022739ee364f51",
+        "android_client_info": {
+          "package_name": "com.Nano.Nanoverse"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "898996940292-trq8t3o9mi28t5bt2cq0h1smrkkrediq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.Nano.Nanoverse",
+            "certificate_hash": "eab59222b154a1828aec47a8e307fe88dcc14bc8"
+          }
+        },
+        {
+          "client_id": "898996940292-koco7lovphtftur37isdu0debsh0ael3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC283h_ZIRclTAsxLE986GckTm6BaZdb6Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "898996940292-koco7lovphtftur37isdu0debsh0ael3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

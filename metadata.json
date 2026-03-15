@@ -1,0 +1,7 @@
+{
+  "name": "Remix: NanoVerse: Conflito de Gangues",
+  "description": "RPG de captura generativa e batalhas de gangues 3vs3 com apostas reais de cartas.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
