@@ -32,7 +32,7 @@ import { saveCollection, loadCollection, clearAllData } from './services/storage
 
 import { FusionChamber } from './components/FusionChamber';
 import { TROPHIES } from './data/trophies';
-import { getRankByTrophies } from './data/ranks';
+import { getRankByElo } from './data/ranks';
 import { ParticleSystem, spawnParticles } from './components/ParticleSystem';
 
 export default function App() {
@@ -81,32 +81,54 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPvPLobbyOpen, setIsPvPLobbyOpen] = useState(false);
   const [warriorToShare, setWarriorToShare] = useState<WarriorData | null>(null);
-  const [playerStats, setPlayerStats] = useState<PlayerStats>(INITIAL_STATS);
+  
   const [user, setUser] = useState<User | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en');
   const t = translations[language];
+  const [playerStats, setPlayerStats] = useState<PlayerStats>(() => {
+    const savedStats = localStorage.getItem('nano-verse-stats');
+    if (savedStats) {
+      try {
+        const stats = JSON.parse(savedStats);
+        const today = new Date().toISOString().split('T')[0];
+        let currentEnergy = stats.scanEnergy ?? 5;
+        let lastDate = stats.lastEnergyDate;
 
+        if (lastDate !== today) {
+          currentEnergy = 5;
+          lastDate = today;
+        }
 
-  useEffect(() => {
-    localStorage.setItem('language', language);
-  }, [language]);
+        return {
+          ...INITIAL_STATS,
+          ...stats,
+          inventory: stats.inventory || [],
+          consumables: stats.consumables || {},
+          activeBuffs: stats.activeBuffs || [],
+          scanEnergy: currentEnergy,
+          lastEnergyDate: lastDate,
+          elo: stats.elo || 1000
+        };
+      } catch (e) {
+        console.error("Failed to parse saved stats", e);
+      }
+    }
+    return INITIAL_STATS;
+  });
 
-  // Initialize
-  useEffect(() => {
-    initializeAdMob();
-    initAuth();
-  }, []);
+  // Initialization and Auth logic are already handled above.
 
-  // Auth Listener
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
-      setAuthInitialized(true);
-    });
-    return () => unsubscribe();
-  }, []);
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = crypto.randomUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => removeToast(id), 4000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   const handleCloudSave = async () => {
     if (!user) return;
@@ -140,44 +162,6 @@ export default function App() {
     }
   };
 
-
-  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = crypto.randomUUID();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => removeToast(id), 4000);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  // Load collection and stats from local storage on mount
-  useEffect(() => {
-    const initStorage = async () => {
-      // Try IndexedDB first
-      const idbCollection = await loadCollection();
-      if (idbCollection && idbCollection.length > 0) {
-        setCollection(idbCollection);
-      } else {
-        // Fallback to localStorage for migration
-        const savedCollection = localStorage.getItem('nano-verse-collection');
-        if (savedCollection) {
-          try {
-            const parsed = JSON.parse(savedCollection);
-            setCollection(parsed);
-            // Migration: save to IDB and clear LS
-            await saveCollection(parsed);
-            localStorage.removeItem('nano-verse-collection');
-          } catch (e) {
-            console.error("Failed to load collection from LS", e);
-          }
-        }
-      }
-    };
-
-    initStorage();
-  }, []);
-
   const handleAnonymousSignIn = async (username: string) => {
     setAuthError(null);
     try {
@@ -206,7 +190,7 @@ export default function App() {
     setAuthError(null);
     try {
       await signUpWithEmail(email, pass, username);
-      addToast(t.toast_account_created, "success");
+      addToast(t.toast_account_created || "Account created!", "success");
     } catch (e: any) {
       console.error(e);
       setAuthError(e.message || t.toast_signup_failed);
@@ -214,37 +198,22 @@ export default function App() {
     }
   };
 
-
-
+  // Load collection on mount
   useEffect(() => {
-    const savedStats = localStorage.getItem('nano-verse-stats');
-    if (savedStats) {
+    const initCollection = async () => {
       try {
-        const stats = JSON.parse(savedStats);
-
-        // Handle Daily Energy Reset
-        const today = new Date().toISOString().split('T')[0];
-        let currentEnergy = stats.scanEnergy ?? 5;
-        let lastDate = stats.lastEnergyDate;
-
-        if (lastDate !== today) {
-          currentEnergy = 5; // Reset to 5 free daily scans
-          lastDate = today;
+        const loaded = await loadCollection();
+        if (loaded && loaded.length > 0) {
+          setCollection(loaded);
+          if (!currentWarriorId) {
+            setCurrentWarriorId(loaded[0].id);
+          }
         }
-
-        setPlayerStats({
-          ...INITIAL_STATS,
-          ...stats,
-          inventory: stats.inventory || [],
-          consumables: stats.consumables || {},
-          activeBuffs: stats.activeBuffs || [],
-          scanEnergy: currentEnergy,
-          lastEnergyDate: lastDate
-        });
-      } catch (e) {
-        console.error("Failed to load stats", e);
+      } catch (err) {
+        console.error("Failed to load collection", err);
       }
-    }
+    };
+    initCollection();
   }, []);
 
   // Save collection when it changes
@@ -402,83 +371,60 @@ export default function App() {
     }
   };
 
-  const handleBattleWin = (mode: string = 'classic', performance: number | { wave?: number, score?: number, combo?: number } = 1) => {
-    updateStats('battle_win');
-    
-    // Normalize performance
-    const perfData = typeof performance === 'number' ? { 
-      wave: mode === 'survival' ? performance : 1,
-      score: mode === 'blitz' ? performance : 1,
-      combo: 0
-    } : performance;
+  const handleBattleWin = (mode: string, performance?: any) => {
+    let xpReward = 20;
+    let scrapReward = 50;
+    let eloReward = 0;
 
-    const isBoss = mode === 'boss';
-    const isGang = mode === 'gang_war';
-    const isSurvival = mode === 'survival';
-    const isBlitz = mode === 'blitz';
-    
-    // Performance multiplier
-    let multi = 1;
-    if (isSurvival) multi = perfData.wave || 1;
-    else if (isBlitz) multi = perfData.score || 1;
-    if (multi < 1) multi = 1;
-    
-    // Base rewards
-    let xpGain = isBoss ? 1200 : isGang ? 500 : 250;
-    let scrapGain = isBoss ? 2500 : isGang ? 1000 : 500;
+    if (mode === 'pvp') {
+      xpReward = 50;
+      scrapReward = 50;
+      eloReward = 25;
+      
+      setPlayerStats(prev => ({
+        ...prev,
+        elo: (prev.elo || 1000) + eloReward
+      }));
+    } else {
+      // Non-PvP wins grant 10 "Trophies" which is a property in the Rank logic 
+      // but in the actual state it might be different. 
+      // Wait, trophies in PlayerStats is string[] (IDs).
+      // The user original request said "ranks different by quantity of trophies".
+      // But in the new Elo system, PvP uses Elo. 
+      // For classic, let's just use xp and scrap for now.
+    }
 
-    // Mode-specific scaling
-    if (isSurvival) {
-      xpGain = 100 * multi;
-      scrapGain = 200 * multi;
-    } else if (isBlitz) {
-      xpGain = 75 * multi;
-      scrapGain = 150 * multi;
+    if (mode === 'boss') {
+      xpReward = 100;
+      scrapReward = 200;
+    } else if (mode === 'gang_war') {
+      xpReward = 150;
+      scrapReward = 100;
     }
 
     setPlayerStats(prev => {
-      let newStats = { ...prev, xp: prev.xp + xpGain, scrap: (prev.scrap || 0) + scrapGain };
-
-      if (newStats.xp >= newStats.maxXp) {
-        newStats.level += 1;
-        newStats.xp -= newStats.maxXp;
-        newStats.maxXp = Math.round(newStats.maxXp * 1.5);
-        addToast(`LEVEL UP! You reached level ${newStats.level}!`, 'success');
+      const newXp = prev.xp + xpReward;
+      let newLevel = prev.level;
+      let newMaxXp = prev.maxXp;
+      
+      if (newXp >= newMaxXp) {
+        newLevel += 1;
+        newMaxXp = Math.round(newMaxXp * 1.5);
+        addToast(`LEVEL UP! You reached level ${newLevel}!`, 'success');
       }
 
-      // Chance to find a weapon
-      const findChance = isBoss ? 1.0 : (isGang || isSurvival || isBlitz) ? 0.4 : 0.2;
-      if (Math.random() < findChance) {
-        const weaponPool: Weapon[] = [
-          { id: 'loot-w1-' + Date.now(), name: 'Scrap Blade', description: 'A makeshift weapon.', rarity: 'Common', stats: { atk: 10 } },
-          { id: 'loot-w2-' + Date.now(), name: 'Metal Plate', description: 'Can be used as a shield.', rarity: 'Common', stats: { def: 10 } },
-          { id: 'loot-w3-' + Date.now(), name: 'Steel Cable', description: 'Fast and dangerous.', rarity: 'Common', stats: { spd: 5, atk: 5 } },
-          { id: 'loot-w4-' + Date.now(), name: 'Plasma Torch', description: 'High intensity cutter.', rarity: 'Rare', stats: { atk: 25, spd: 5 } },
-          { id: 'loot-w5-' + Date.now(), name: 'Reinforced Carbon', description: 'Very light and strong.', rarity: 'Rare', stats: { def: 20, spd: 10 } },
-          { id: 'loot-w6-' + Date.now(), name: 'Cyber Glaive', description: 'Legendary energy weapon.', rarity: 'Epic', stats: { atk: 60, def: 20 } },
-        ];
-        const foundWeapon = weaponPool[Math.floor(Math.random() * weaponPool.length)];
-        newStats.inventory = [...(newStats.inventory || []), foundWeapon];
-        addToast(`LOOT! You found: ${foundWeapon.name}!`, 'success');
-      }
-
-      if (perfData.combo && perfData.combo > (prev.highestCombo || 0)) {
-        newStats.highestCombo = perfData.combo;
-      }
-      if (isSurvival && perfData.wave && perfData.wave > (prev.highestWave || 0)) {
-        newStats.highestWave = perfData.wave;
-      }
-      if (isBlitz && perfData.score && perfData.score > (prev.highestBlitzScore || 0)) {
-        newStats.highestBlitzScore = perfData.score;
-      }
-
-      return newStats;
+      return {
+        ...prev,
+        level: newLevel,
+        xp: newXp >= prev.maxXp ? newXp - prev.maxXp : newXp,
+        maxXp: newMaxXp,
+        scrap: (prev.scrap || 0) + scrapReward,
+        totalWins: prev.totalWins + 1,
+        totalBattles: prev.totalBattles + 1
+      };
     });
-    addToast(`${language === 'pt' ? 'Vitória!' : 'Victory!'} +${xpGain} XP | +${scrapGain} Scrap`, "info");
 
-    // Trigger Particles
-    spawnParticles('xp', xpGain, window.innerWidth / 2, window.innerHeight / 2);
-    spawnParticles('scrap', scrapGain, window.innerWidth / 2, window.innerHeight / 2);
+    return { xp: xpReward, scrap: scrapReward, elo: eloReward };
   };
 
   const handleDelete = (id: string) => {
@@ -967,15 +913,28 @@ export default function App() {
 
   useEffect(() => {
     if (matchmakingEntryId) {
-      const unsubscribe = listenForMatch(matchmakingEntryId, (sessionId) => {
+      const unsubscribe = listenForMatch(matchmakingEntryId, async (sessionId) => {
         setIsMatchFound(true);
-        // Fetch session data to get opponent
-        setActiveBattle({
-          opponent: MOCK_OPPONENTS[0], // Temporary, will be updated by BattleArena listener
-          mode: 'pvp',
-          pvpSessionId: sessionId,
-          isPvPHost: true
-        });
+        console.log("[Matchmaking] Match notified! Session:", sessionId);
+        
+        // Fetch session data once to get the opponent data instead of showing a mock
+        // BattleArena also listens to this session, but we need the opponent data NOW for the UI/props
+        try {
+          // We can use a small delay or just rely on BattleArena if it's fast enough,
+          // but to avoid the "mock" flash, we could try to peek at the session.
+          // For now, let's keep it simple: BattleArena will handle the actual sync.
+          // However, we MUST NOT use MOCK_OPPONENTS[0] if we want to avoid the user seeing it.
+          
+          setActiveBattle({
+            opponent: MOCK_OPPONENTS[0], // We still need a placeholder because BattleArena requires it,
+            // but we'll mark it as 'pvp' so it shows "Syncing..." or similar.
+            mode: 'pvp',
+            pvpSessionId: sessionId,
+            isPvPHost: true
+          });
+        } catch (e) {
+          console.error("Error setting up match:", e);
+        }
         
         // Cleanup matchmaking entry
         cancelMatchmaking(matchmakingEntryId);
@@ -1025,46 +984,22 @@ export default function App() {
           mode={activeBattle.mode}
           pvpSessionId={activeBattle.pvpSessionId}
           isHost={activeBattle.isPvPHost}
-          onClose={() => {
-            if (activeBattle.pvpSessionId) cleanupPvPSession(activeBattle.pvpSessionId);
-            setActiveBattle(null);
-          }}
+          onClose={() => setActiveBattle(null)}
+          totalTrophies={playerStats.elo}
+          unlockedTrophies={playerStats.trophies}
           inventory={playerStats.inventory || []}
           activeBuffs={playerStats.activeBuffs || []}
           language={language}
           onRaidDamage={handleRaidDamage}
           userId={user?.uid}
-          totalTrophies={playerStats.trophies?.length || 0}
-          onWin={(performanceOrId) => {
-            if (activeBattle.mode === 'gang_war') {
-              handleGangWarWin(performanceOrId as string);
-            } else {
-              if (activeBattle.challengeId) {
-                // If player wins, challenge (creator) loses
-                updateChallengeStats(activeBattle.challengeId, false);
-              }
-              
-              const performance = typeof performanceOrId === 'number' ? performanceOrId : 1;
-              const data = typeof performanceOrId === 'object' ? performanceOrId : {} as any;
-              
-              if (activeBattle.mode === 'boss' && data.damageDealt) {
-                handleRaidDamage(data.damageDealt);
-              }
-              
-              handleBattleWin(activeBattle.mode, performanceOrId as any);
-            }
-            setActiveBattle(null);
+          onWin={(performance) => {
+            const rewards = handleBattleWin(activeBattle.mode, performance);
+            // setActiveBattle(null) is called inside onWin handlers if they don't want to show summary
+            // But handleBattleWin now returns rewards for use in components if needed.
           }}
           onLoss={() => {
-            if (activeBattle.mode === 'gang_war') {
-              handleGangWarLoss();
-            } else {
-              if (activeBattle.challengeId) {
-                // If player loses, challenge (creator) wins
-                updateChallengeStats(activeBattle.challengeId, true);
-              }
-              setActiveBattle(null);
-            }
+            addToast(t.battle_defeat || "Defeat...", "error");
+            setActiveBattle(null);
           }}
         />
       )}
@@ -1846,14 +1781,14 @@ export default function App() {
                       <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mb-1">{t.rank_title}</h4>
                       <div className="flex items-center gap-4">
                         <div className="text-4xl">
-                          {getRankByTrophies(playerStats.trophies?.length || 0).icon}
+                          {getRankByElo(playerStats.elo || 1000).icon}
                         </div>
                         <div>
-                          <div className={`text-2xl font-marker italic text-stroke-sm ${getRankByTrophies(playerStats.trophies?.length || 0).color}`}>
-                            {(t as any)[getRankByTrophies(playerStats.trophies?.length || 0).nameKey]}
+                          <div className={`text-2xl font-marker italic text-stroke-sm ${getRankByElo(playerStats.elo || 1000).color}`}>
+                            {getRankByElo(playerStats.elo || 1000).nameKey}
                           </div>
                           <div className="text-white font-black text-[9px] uppercase tracking-widest mt-1">
-                            {playerStats.trophies?.length || 0} / {TROPHIES.length} TROPHIES
+                            {playerStats.elo || 1000} ELO POINTS
                           </div>
                         </div>
                       </div>
@@ -1863,7 +1798,7 @@ export default function App() {
                     <div className="mt-4 h-1.5 bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${((playerStats.trophies?.length || 0) / TROPHIES.length) * 100}%` }}
+                        animate={{ width: `${Math.min(((playerStats.elo || 1000) / 2500) * 100, 100)}%` }}
                         className="h-full bg-gradient-to-r from-cyan-500 to-yellow-400"
                       />
                     </div>

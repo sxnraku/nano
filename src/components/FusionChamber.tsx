@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Zap, Plus, ArrowRight, Dna, AlertTriangle, Cpu } from 'lucide-react';
 import { type WarriorData, fuseWarriors, generateWarriorImage } from '../services/gemini';
-import { useAudio } from '../services/audioService';
 import { GachiIcon } from './GachiIcon';
 import { GachiSticker } from './GachiSticker';
 import { translations, type Language } from '../services/localizationService';
@@ -19,7 +18,6 @@ interface FusionChamberProps {
 
 export function FusionChamber({ collection, isOpen, onClose, onFuse, scrap, nanites, language = 'en' }: FusionChamberProps) {
   const t = translations[language];
-  const { playSFX } = useAudio();
   const [selectedWarriors, setSelectedWarriors] = useState<[WarriorData | null, WarriorData | null]>([null, null]);
   const [isFusing, setIsFusing] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
@@ -28,7 +26,6 @@ export function FusionChamber({ collection, isOpen, onClose, onFuse, scrap, nani
   if (!isOpen) return null;
 
   const handleSelect = (warrior: WarriorData) => {
-    playSFX('CLICK');
     if (selectedWarriors[0]?.id === warrior.id) {
       setSelectedWarriors([null, selectedWarriors[1]]);
     } else if (selectedWarriors[1]?.id === warrior.id) {
@@ -50,7 +47,6 @@ export function FusionChamber({ collection, isOpen, onClose, onFuse, scrap, nani
     if (isPremium && nanites < naniteCost) return;
 
     setIsFusing(true);
-    playSFX('SCAN');
 
     try {
       setFusionStep(isPremium ? t.fusion_step_stabilizing : t.fusion_step_analyzing);
@@ -62,7 +58,6 @@ export function FusionChamber({ collection, isOpen, onClose, onFuse, scrap, nani
       const finalWarrior = { ...fusedData, imageUrl };
 
       onFuse(finalWarrior, [w1.id, w2.id], scrapCost, naniteCost);
-      playSFX('WIN');
       onClose();
     } catch (error) {
       console.error("Fusion failed:", error);
@@ -167,7 +162,7 @@ export function FusionChamber({ collection, isOpen, onClose, onFuse, scrap, nani
               </div>
             </div>
             <button
-              onClick={() => { playSFX('CLICK'); setIsPremium(!isPremium); }}
+              onClick={() => { setIsPremium(!isPremium); }}
               className={`w-14 h-8 border-2 border-black rounded-sm relative transition-colors ${isPremium ? 'bg-cyan-500' : 'bg-zinc-800'}`}
             >
               <motion.div

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Star, Zap } from 'lucide-react';
 import type { WarriorData } from '../services/gemini';
 import { TROPHIES } from '../data/trophies';
-import { getRankByTrophies } from '../data/ranks';
+import { getRankByElo } from '../data/ranks';
 import { translations, Language } from '../services/localizationService';
 import { useAudio } from '../services/audioService';
 
@@ -24,6 +24,7 @@ interface BattleVictoryProps {
   };
   unlockedTrophies?: string[];
   totalTrophies?: number;
+  eloChange?: number;
   language?: Language;
   onContinue: () => void;
 }
@@ -48,9 +49,9 @@ function getRank(stats: BattleVictoryProps['stats'], player: WarriorData) {
   return { letter: 'C', color: 'text-zinc-400', bg: 'bg-zinc-600', border: 'border-zinc-400', shadow: '' };
 }
 
-export function BattleVictory({ player, opponent, mode, stats, rewards, unlockedTrophies, totalTrophies, language = 'en', onContinue }: BattleVictoryProps) {
+export function BattleVictory({ player, opponent, mode, stats, rewards, unlockedTrophies, totalTrophies, eloChange, language = 'en', onContinue }: BattleVictoryProps) {
   const rank = getRank(stats, player);
-  const playerRank = getRankByTrophies(totalTrophies || 0);
+  const playerRank = getRankByElo(totalTrophies || 1000); // Trophies passed is actually Elo in PvP context
   const t = translations[language];
   const { playSFX } = useAudio();
 
@@ -211,7 +212,7 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  transition={{ delay: 1.1, type: 'spring' }}
+                  transition={{ delay: 1.2, type: 'spring' }}
                   className="w-14 h-14 bg-black border-[3px] border-red-500 flex items-center justify-center skew-x-[-8deg] shadow-[4px_4px_0_rgba(239,68,68,0.4)] overflow-hidden"
                 >
                   <div className="w-full h-full bg-white flex items-center justify-center">
@@ -224,6 +225,27 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
                   <div className="text-xs text-white font-bold">SCRAP</div>
                 </div>
               </div>
+
+              {/* Elo (PvP Only) */}
+              {(mode === 'pvp' || eloChange) && (
+                <div className="flex-1 flex flex-col items-center gap-2 py-5 px-4">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 1.4, type: 'spring' }}
+                    className="w-14 h-14 bg-black border-[3px] border-yellow-500 flex items-center justify-center skew-x-[-8deg] shadow-[4px_4px_0_rgba(234,179,8,0.4)] overflow-hidden"
+                  >
+                    <div className="w-full h-full bg-white flex items-center justify-center">
+                      <Trophy className="w-8 h-8 text-yellow-500 fill-yellow-500" />
+                    </div>
+                  </motion.div>
+                  <div className="text-center">
+                    <div className="text-[10px] text-zinc-500 font-bold uppercase">Elo</div>
+                    <div className="text-3xl font-black text-yellow-400">+{eloChange || 25}</div>
+                    <div className="text-xs text-white font-bold">POINTS</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

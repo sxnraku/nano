@@ -217,8 +217,8 @@ export function BattleArena({
 
   // Game State
   // Game State
-  const [playerHp, setPlayerHp] = useState(effectivePlayerStats.hp * 10); // Even more health for longer battles
-  const [opponentHp, setOpponentHp] = useState(currentOpponent.stats.hp * 2); // Opponents also get more health for balance
+  const [playerHp, setPlayerHp] = useState(effectivePlayerStats.hp * 5);
+  const [opponentHp, setOpponentHp] = useState(currentOpponent.stats.hp * 5); 
   const [playerEnergy, setPlayerEnergy] = useState(0);
   const [combo, setCombo] = useState(0);
   const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active');
@@ -343,11 +343,11 @@ export function BattleArena({
 
     const unsubscribe = subscribeToPvPSession(pvpSessionId, (session) => {
       if (isHost) {
-        setPlayerHp(session.hostHp);
-        setOpponentHp(session.guestHp);
+        setPlayerHp(session.hostHp * 5);
+        setOpponentHp(session.guestHp * 5);
       } else {
-        setPlayerHp(session.guestHp);
-        setOpponentHp(session.hostHp);
+        setPlayerHp(session.guestHp * 5);
+        setOpponentHp(session.hostHp * 5);
       }
       
       if (session.status === 'finished' && gameStatus === 'active') {
@@ -437,8 +437,9 @@ export function BattleArena({
 
     setOpponentTeam([scaledOpponent]);
     setCurrentOpponentIdx(0);
-    setOpponentHp(scaledOpponent.stats.hp);
+    setOpponentHp(scaledOpponent.stats.hp * 5);
     setOpponentEffects([]); // Clear effects on new opponent
+    setIsFlashActive(false); // Reset flash
 
     if (mode === 'survival') {
       setWave(w => w + 1);
@@ -460,7 +461,6 @@ export function BattleArena({
         if (prev === 3) return 2;
         if (prev === 2) return 1;
         if (prev === 1) {
-          playSFX('START'); // I'll assume this exists or use HIT
           return 'GO';
         }
         if (prev === 'GO') {
@@ -469,7 +469,7 @@ export function BattleArena({
         }
         return prev;
       });
-    }, 1000);
+    }, 800); // Slightly faster for punchier feel
 
     return () => clearInterval(countdownTimer.current);
   }, [countdown]);
@@ -511,13 +511,13 @@ export function BattleArena({
     setComboTimerKey(prev => prev + 1);
 
     // Calculate Damage
-    const baseDmg = Math.max(5, Math.round(effectivePlayerStats.atk * 0.1)); // Reduced for longer battles
+    const baseDmg = Math.max(10, Math.round(effectivePlayerStats.atk * 0.25)); // Balanced for fast combat
     const comboMultiplier = 1 + (combo * 0.05);
     const elementMultiplier = getElementalMultiplier(player, currentOpponent);
 
     // Passive: Adrenaline (Berserker)
     let passiveMultiplier = 1;
-    if (player.passive?.effect === 'damage_boost_low_hp' && playerHp < (effectivePlayerStats.hp * 10) * 0.4) {
+    if (player.passive?.effect === 'damage_boost_low_hp' && playerHp < (effectivePlayerStats.hp * 5) * 0.4) {
       passiveMultiplier += player.passive.value;
     }
     passiveMultiplier += teamSynergy.atk;
@@ -540,23 +540,29 @@ export function BattleArena({
 
     // Apply Damage
     if (isCrit) {
-      playSFX('CRITICAL');
-      vibrate([50, 30, 50]); // Lighter crit vibration
-      
-      // Hit Stop & Flash
-      triggerShake(6, 0.15); // Lighter shake
+      vibrate([50, 30, 50]);
+      triggerShake(8, 0.2);
     } else {
-      playSFX('HIT');
-      vibrate(30); // Lighter tap vibration
-      triggerShake(3, 0.1); // Lighter shake
+      vibrate(30);
+      triggerShake(4, 0.1);
     }
-    setOpponentHp(prev => Math.max(0, prev - damage));
 
-    // PvP Real-time Sync (Update opponent's HP in Firestore)
+    const newOppHp = Math.max(0, opponentHp - damage);
+    
+    // Hit Stop on final blow
+    if (newOppHp === 0 && !isHitStopping) {
+      setIsHitStopping(true);
+      if ('vibrate' in navigator) navigator.vibrate([200, 100, 500]);
+      triggerShake(15, 0.5);
+      setTimeout(() => setIsHitStopping(false), 500);
+    }
+
+    setOpponentHp(newOppHp);
+
+    // PvP Real-time Sync
     if (isPvP && pvpSessionId) {
       const targetHPField = isHost ? 'guestHp' : 'hostHp';
-      const newOppHp = Math.max(0, opponentHp - damage);
-      updatePvPStats(pvpSessionId, { [targetHPField]: newOppHp });
+      updatePvPStats(pvpSessionId, { [targetHPField]: Math.floor(newOppHp / 5) });
       
       if (newOppHp <= 0) {
         updatePvPStats(pvpSessionId, { 
@@ -574,7 +580,7 @@ export function BattleArena({
     // Passive: Lifesteal
     if (player.passive?.effect === 'lifesteal') {
       const heal = Math.round(damage * player.passive.value);
-      if (heal > 0) setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 10, prev + heal));
+      if (heal > 0) setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 5, prev + heal));
     }
 
     // Apply Status Effects (Chance)
@@ -591,8 +597,12 @@ export function BattleArena({
     setIsOpponentHit(true);
     setTimeout(() => setIsOpponentHit(false), 100);
 
+    // Minor Hit Flash
+    setIsFlashActive(true);
+    setTimeout(() => setIsFlashActive(false), 50);
+
     spawnDamageNumber(damage, 'opponent', isCrit, undefined, undefined, undefined, getElement(player));
-  }, [gameStatus, playerEffects, combo, maxCombo, effectivePlayerStats, player, currentOpponent, opponentEffects, teamSynergy, playSFX]);
+  }, [gameStatus, playerEffects, combo, maxCombo, effectivePlayerStats, player, currentOpponent, opponentEffects, teamSynergy, isHitStopping]);
 
   // Special Attack
   const handleSpecial = (e: React.MouseEvent) => {
@@ -643,9 +653,9 @@ export function BattleArena({
   }, [player, currentOpponent, effectivePlayerStats, teamSynergy, playerEffects, opponentEffects]);
 
   useEffect(() => {
-    if (gameStatus !== 'active' || isPvP || countdown !== null) return; // No bot attacks in PvP or during countdown
+    if (gameStatus !== 'active' || isPvP || countdown !== null || isFinalizing) return; // No bot attacks in PvP or during countdown/finalizing
 
-    const attackInterval = Math.max(400, 1000 - (opponentRef.current.stats.spd * 8));
+    const attackInterval = Math.max(800, 2000 - (opponentRef.current.stats.spd * 15)); // Slower but steadier interval
 
     opponentAttackTimer.current = setInterval(() => {
       // Check Stun
@@ -659,8 +669,8 @@ export function BattleArena({
       const synergy = synergyRef.current;
       const pEffects = playerEffectsRef.current;
 
-      // Opponent damage - Balanced for longer duration
-      const baseDmg = Math.max(10, Math.round(currentOpp.stats.atk * 0.08)); 
+      // Opponent damage - Balanced for fast combat
+      const baseDmg = Math.max(15, Math.round(currentOpp.stats.atk * 0.22)); 
       const elementMultiplier = getElementalMultiplier(currentOpp, currentPlayer);
       let damage = Math.round(baseDmg * elementMultiplier);
 
@@ -693,7 +703,7 @@ export function BattleArena({
     return () => {
       if (opponentAttackTimer.current) clearInterval(opponentAttackTimer.current);
     };
-  }, [gameStatus, currentOpponent.id]); // Only restart if game status or opponent changes
+  }, [gameStatus, currentOpponent.id, countdown, isFinalizing]); // Added countdown and isFinalizing to dependencies
 
   // Blitz Timer
   useEffect(() => {
@@ -757,7 +767,7 @@ export function BattleArena({
         const nextIdx = currentOpponentIdx + 1;
         setCurrentOpponentIdx(nextIdx);
         const nextOpponent = opponentTeam[nextIdx];
-        setOpponentHp(nextOpponent.stats.hp);
+        setOpponentHp(nextOpponent.stats.hp * 5);
         playSFX('HIT');
         vibrate(100);
         spawnDamageNumber(0, 'opponent', false, 50, 50);
@@ -818,7 +828,7 @@ export function BattleArena({
       };
       setOpponentTeam([boss]);
       setCurrentOpponentIdx(0);
-      setOpponentHp(boss.stats.hp * 2); // Apply health multiplier
+      setOpponentHp(boss.stats.hp * 5); // Consistent multiplier
     }
     // setGameStatus('active'); - redundant, already active by default
     if (mode === 'boss' && onRaidDamage) {
@@ -1014,7 +1024,7 @@ export function BattleArena({
                 <motion.div
                   className={`h-full ${mode === 'boss' ? 'bg-purple-600' : 'bg-red-600'} relative`}
                   initial={{ width: '100%' }}
-                  animate={{ width: `${(opponentHp / (currentOpponent.stats.hp * 2)) * 100}%` }}
+                   animate={{ width: `${(opponentHp / (currentOpponent.stats.hp * 5)) * 100}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
@@ -1110,7 +1120,7 @@ export function BattleArena({
                 <motion.div
                   className="h-full bg-cyan-500 relative"
                   initial={{ width: '100%' }}
-                  animate={{ width: `${(playerHp / (effectivePlayerStats.hp * 10)) * 100}%` }}
+                   animate={{ width: `${(playerHp / (effectivePlayerStats.hp * 5)) * 100}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
@@ -1199,18 +1209,44 @@ export function BattleArena({
           <AnimatePresence>
             {countdown !== null && (
               <motion.div
-                initial={{ scale: 2, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                className="absolute inset-0 z-[100] flex items-center justify-center bg-black/40 pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-[2px] pointer-events-none"
               >
                 <motion.div
                   key={countdown}
-                  initial={{ scale: 0.5, opacity: 0, rotate: -20 }}
-                  animate={{ scale: 1.2, opacity: 1, rotate: 0 }}
-                  className="font-marker text-8xl text-white italic drop-shadow-[10px_10px_0_#000] text-stroke-lg"
+                  initial={{ scale: 0, opacity: 0, rotate: -45, filter: 'blur(10px)' }}
+                  animate={{ scale: 1.5, opacity: 1, rotate: 0, filter: 'blur(0px)' }}
+                  exit={{ scale: 3, opacity: 0, filter: 'blur(20px)' }}
+                  transition={{ type: 'spring', damping: 10, stiffness: 200 }}
+                  className="font-marker text-[12rem] text-white italic drop-shadow-[15px_15px_0_#000] text-stroke-lg"
                 >
                   {countdown}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Dramatic Win/Loss Banner */}
+          <AnimatePresence>
+            {isFinalizing && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md pointer-events-none"
+              >
+                <motion.div
+                  initial={{ scale: 0.5, y: 100, opacity: 0, rotate: -10 }}
+                  animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
+                  transition={{ type: 'spring', damping: 8, stiffness: 150 }}
+                  className="relative"
+                >
+                   <div className="absolute inset-1 bg-white blur-xl opacity-20" />
+                   <h2 className={`text-9xl font-marker italic uppercase drop-shadow-[15px_15px_0_#000] text-stroke-lg ${playerHp > 0 ? 'text-yellow-400' : 'text-red-600'}`}>
+                     {playerHp > 0 ? 'VICTORY' : 'DEFEAT'}
+                   </h2>
                 </motion.div>
               </motion.div>
             )}
@@ -1327,11 +1363,11 @@ export function BattleArena({
                       onClick={() => {
                         playSFX('CLICK');
                         // Reset Game
-                        setPlayerHp(effectivePlayerStats.hp * 10);
+                        setPlayerHp(effectivePlayerStats.hp * 5);
                         setOpponentTeam(initialOpponentTeam || [initialOpponent]);
                         setCurrentOpponentIdx(0);
                         setCurrentPlayerIdx(0);
-                        setOpponentHp((initialOpponentTeam ? initialOpponentTeam[0] : initialOpponent).stats.hp * 2);
+                        setOpponentHp((initialOpponentTeam ? initialOpponentTeam[0] : initialOpponent).stats.hp * 5);
                         setPlayerEnergy(0);
                         setCombo(0);
                         setWave(1);

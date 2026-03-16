@@ -66,6 +66,7 @@ export interface UserProfile {
   };
   guildRole?: 'leader' | 'coleader' | 'member' | null;
   trophies?: string[];
+  elo: number;
 }
 
 export interface Guild {
@@ -143,7 +144,8 @@ const ensureUserProfile = async (user: User, username?: string) => {
         scansToday: 0,
         gangWarWinsToday: 0,
         lastQuestDate: new Date().toISOString().split('T')[0]
-      }
+      },
+      elo: 1000
     });
   } else {
     const updates: any = { lastActive: Timestamp.now() };
