@@ -118,7 +118,20 @@ export default function App() {
     return INITIAL_STATS;
   });
 
-  // Initialization and Auth logic are already handled above.
+  // Initialization and Auth logic
+  useEffect(() => {
+    const handleInitAuth = async () => {
+      await initAuth();
+    };
+    handleInitAuth();
+
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      setUser(u);
+      setAuthInitialized(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = crypto.randomUUID();
@@ -1766,7 +1779,7 @@ export default function App() {
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-yellow-400/5 rotate-45 pointer-events-none" />
                 <h3 className="text-yellow-400 font-marker text-2xl mb-6 uppercase italic tracking-tighter">{t.settings_player_data}</h3>
                 <div className="space-y-4">
-                  {user && (
+                  {user ? (
                     <>
                       {!user.isAnonymous ? (
                         <div className="space-y-3 border-b border-zinc-800 pb-4">
@@ -1812,6 +1825,16 @@ export default function App() {
                         </div>
                       )}
                     </>
+                  ) : (
+                    <div className="bg-zinc-900 border-2 border-zinc-800 p-4 mb-4 shadow-[4px_4px_0_#000] text-center">
+                      <p className="text-zinc-400 text-[10px] font-black uppercase mb-3">Not Authorized</p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="w-full py-2 bg-yellow-400 text-black font-black uppercase text-[10px] border-2 border-black shadow-[4px_4px_0_#000]"
+                      >
+                        RETRY CONNECTION
+                      </button>
+                    </div>
                   )}
 
                   <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
