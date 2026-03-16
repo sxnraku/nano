@@ -101,7 +101,7 @@ export function assignPassive(warriorClass: string, element: string): PassiveAbi
  * Analyzes an image and generates warrior metadata.
  */
 export async function analyzeAndCreateWarrior(base64Image: string): Promise<WarriorData> {
-  const model = "gemini-1.5-flash"; // Correct stable model name
+  const model = "gemini-2.5-flash"; 
 
   const prompt = `
     Analyze this image. Identify the main object, its color, material, and utility.
@@ -206,8 +206,7 @@ export type WarriorStyle = 'Default' | 'Glitch' | 'Neon' | 'Cyber' | 'Dark' | 'R
  * Generates the visual avatar for the warrior.
  */
 export async function generateWarriorImage(visualPrompt: string, base64Image?: string, style: WarriorStyle = 'Default'): Promise<string> {
-  // Use a stable model for prompt enhancement
-  const model = "gemini-1.5-flash"; 
+  const model = "gemini-2.5-flash"; 
 
   let stylePrompt = "";
   switch (style) {
@@ -283,7 +282,7 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
 }
 
 export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: boolean = false): Promise<WarriorData> {
-  const model = "gemini-1.5-flash";
+  const model = "gemini-2.5-flash";
 
   const prompt = `
     WARRIOR FUSION:
