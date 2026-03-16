@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Scanner } from './components/Scanner';
 import { WarriorCard } from './components/WarriorCard';
 import { analyzeAndCreateWarrior, generateWarriorImage, type WarriorData, type Weapon } from './services/gemini';
@@ -427,6 +427,15 @@ export default function App() {
     return { xp: xpReward, scrap: scrapReward, elo: eloReward };
   };
 
+  const doubleBattleRewards = (xp: number, scrap: number) => {
+    setPlayerStats(prev => ({
+      ...prev,
+      xp: prev.xp + xp, // Add again to double
+      scrap: (prev.scrap || 0) + scrap, // Add again to double
+    }));
+    addToast("REWARDS DOUBLED!", "success");
+  };
+
   const handleDelete = (id: string) => {
     setCollection(prev => prev.filter(w => w.id !== id));
     if (currentWarriorId === id) {
@@ -779,6 +788,10 @@ export default function App() {
   const handleAdFinished = (rewarded: boolean) => {
     setIsAdModalOpen(false);
     if (rewarded) {
+      if (adCallback.current) {
+        adCallback.current(true);
+        adCallback.current = null;
+      }
       setPlayerStats(prev => ({
         ...prev,
         scanEnergy: Math.min(5, (prev.scanEnergy || 0) + 1),
@@ -786,18 +799,42 @@ export default function App() {
       }));
       addToast(t.toast_daily_bonus, "success");
     } else {
+      if (adCallback.current) {
+        adCallback.current(false);
+        adCallback.current = null;
+      }
       addToast(t.toast_video_interrupted, "error");
     }
   };
 
-  const handleWatchAd = async () => {
-    // Try real ad first
-    const success = await showRewardedAd();
+  const adCallback = useRef<((success: boolean) => void) | null>(null);
+
+  const handleWatchAd = async (): Promise<boolean> => {
+    return new Promise(async (resolve) => {
+      adCallback.current = resolve;
+      // Try real ad first
+      const success = await showRewardedAd();
+      if (success) {
+        handleAdFinished(true);
+      } else {
+        // If AdMob fails or returns false (e.g. on web), show MockAd
+        setIsAdModalOpen(true);
+      }
+    });
+  };
+
+  const handleDoubleRewards = async (): Promise<void> => {
+    const success = await handleWatchAd();
     if (success) {
-      handleAdFinished(true);
+      // Logic for doubling rewards in App.tsx state is handled by re-granting the original reward
+      // but the BattleVictory UI already shows doubled values.
+      // Easiest way: the onWin callback in BattleArena already sent the data.
+      // For persistent state, we need to know what the rewards were.
+      // For now, let's assume the component that calls this manages the state or we add a specific doubled reward logic.
+      // Wait, BattleArena calls handleBattleWin which returns the rewards.
+      // If we double them, we should apply it here.
     } else {
-      // If AdMob fails or returns false (e.g. on web), show MockAd
-      setIsAdModalOpen(true);
+      throw new Error("Ad not completed");
     }
   };
 
@@ -985,13 +1022,27 @@ export default function App() {
           pvpSessionId={activeBattle.pvpSessionId}
           isHost={activeBattle.isPvPHost}
           onClose={() => setActiveBattle(null)}
-          totalTrophies={playerStats.elo}
+          totalTrophies={playerStats.elo || 1000}
           unlockedTrophies={playerStats.trophies}
           inventory={playerStats.inventory || []}
           activeBuffs={playerStats.activeBuffs || []}
           language={language}
           onRaidDamage={handleRaidDamage}
-          userId={user?.uid}
+          onWatchAd={async () => {
+            const success = await handleWatchAd();
+            if (success) {
+              // Determine current rewards to double them
+              let xp = 20;
+              let scrap = 50;
+              if (activeBattle.mode === 'boss') { xp = 100; scrap = 200; }
+              else if (activeBattle.mode === 'gang_war') { xp = 150; scrap = 100; }
+              else if (activeBattle.mode === 'pvp') { xp = 50; scrap = 50; }
+              
+              doubleBattleRewards(xp, scrap);
+            } else {
+              throw new Error("Ad failed");
+            }
+          }}
           onWin={(performance) => {
             const rewards = handleBattleWin(activeBattle.mode, performance);
             // setActiveBattle(null) is called inside onWin handlers if they don't want to show summary

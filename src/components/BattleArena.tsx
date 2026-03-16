@@ -46,6 +46,7 @@ interface BattleArenaProps {
   userId?: string;
   unlockedTrophies?: string[];
   totalTrophies?: number;
+  onWatchAd?: () => Promise<void>;
 }
 
 interface DamageNumber {
@@ -164,7 +165,8 @@ export function BattleArena({
   onRaidDamage,
   userId,
   unlockedTrophies,
-  totalTrophies
+  totalTrophies,
+  onWatchAd
 }: BattleArenaProps) {
   const t = translations[language];
   const { playSFX } = useAudio();
@@ -1292,6 +1294,7 @@ export function BattleArena({
                 unlockedTrophies={unlockedTrophies}
                 totalTrophies={totalTrophies}
                 language={language}
+                onWatchAd={onWatchAd}
                 onContinue={() => {
                   if (onWin) {
                     if (mode === 'gang_war') {

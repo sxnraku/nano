@@ -27,6 +27,7 @@ interface BattleVictoryProps {
   eloChange?: number;
   language?: Language;
   onContinue: () => void;
+  onWatchAd?: () => Promise<void>;
 }
 
 function getRank(stats: BattleVictoryProps['stats'], player: WarriorData) {
@@ -49,7 +50,9 @@ function getRank(stats: BattleVictoryProps['stats'], player: WarriorData) {
   return { letter: 'C', color: 'text-zinc-400', bg: 'bg-zinc-600', border: 'border-zinc-400', shadow: '' };
 }
 
-export function BattleVictory({ player, opponent, mode, stats, rewards, unlockedTrophies, totalTrophies, eloChange, language = 'en', onContinue }: BattleVictoryProps) {
+export function BattleVictory({ player, opponent, mode, stats, rewards, unlockedTrophies, totalTrophies, eloChange, language = 'en', onContinue, onWatchAd }: BattleVictoryProps) {
+  const [isDoubled, setIsDoubled] = React.useState(false);
+  const [isWatching, setIsWatching] = React.useState(false);
   const rank = getRank(stats, player);
   const playerRank = getRankByElo(totalTrophies || 1000); // Trophies passed is actually Elo in PvP context
   const t = translations[language];
@@ -202,7 +205,12 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
                 </motion.div>
                 <div className="text-center">
                   <div className="text-[10px] text-zinc-500 font-bold uppercase">Experience</div>
-                  <div className="text-3xl font-black text-cyan-400">+{rewards.xp}</div>
+                  <motion.div 
+                    animate={isDoubled ? { scale: [1, 1.2, 1], color: '#22d3ee' } : {}}
+                    className="text-3xl font-black text-cyan-400"
+                  >
+                    +{isDoubled ? rewards.xp * 2 : rewards.xp}
+                  </motion.div>
                   <div className="text-xs text-white font-bold">XP</div>
                 </div>
               </div>
@@ -221,7 +229,12 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
                 </motion.div>
                 <div className="text-center">
                   <div className="text-[10px] text-zinc-500 font-bold uppercase">Scrap</div>
-                  <div className="text-3xl font-black text-red-400">+{rewards.scrap}</div>
+                  <motion.div 
+                    animate={isDoubled ? { scale: [1, 1.2, 1], color: '#f87171' } : {}}
+                    className="text-3xl font-black text-red-400"
+                  >
+                    +{isDoubled ? rewards.scrap * 2 : rewards.scrap}
+                  </motion.div>
                   <div className="text-xs text-white font-bold">SCRAP</div>
                 </div>
               </div>
@@ -285,6 +298,46 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
             </motion.div>
           )}
         </AnimatePresence>
+        
+        {/* Double Rewards Ad Button */}
+        {!isDoubled && onWatchAd && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 1.5 }}
+            className="w-full"
+          >
+            <button
+              onClick={async () => {
+                setIsWatching(true);
+                playSFX('CLICK');
+                try {
+                  await onWatchAd();
+                  setIsDoubled(true);
+                } catch (e) {
+                  console.error("Ad failed", e);
+                } finally {
+                  setIsWatching(false);
+                }
+              }}
+              disabled={isWatching}
+              className="w-full py-3 bg-indigo-600 text-white font-black uppercase italic border-4 border-black shadow-[4px_4px_0_#000] flex items-center justify-center gap-2 hover:bg-indigo-500 disabled:opacity-50 transition-all"
+            >
+              <Zap className={`w-5 h-5 ${isWatching ? 'animate-spin' : 'fill-white'}`} />
+              {isWatching ? 'Preparing Video...' : 'DOUBLE REWARDS (WATCH AD)'}
+            </button>
+          </motion.div>
+        )}
+
+        {isDoubled && (
+           <motion.div
+             initial={{ scale: 0 }}
+             animate={{ scale: 1 }}
+             className="w-full py-2 bg-green-500 text-black font-black text-center border-4 border-black uppercase italic shadow-[4px_4px_0_#000]"
+           >
+             REWARDS DOUBLED! ⚡⚡
+           </motion.div>
+        )}
 
         {/* Continue Button */}
         <motion.button

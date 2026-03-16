@@ -1,7 +1,7 @@
 import { AdMob, AdMobRewardItem, RewardAdOptions, RewardAdPluginEvents } from '@capacitor-community/admob';
 import { Capacitor } from '@capacitor/core';
 
-export const REWARDED_AD_UNIT_ID = 'ca-app-pub-2396252945133485/7514250510';
+export const REWARDED_AD_UNIT_ID = 'ca-app-pub-7583056430043166/8113371532';
 
 export async function initializeAdMob() {
     if (Capacitor.getPlatform() === 'web') return;
