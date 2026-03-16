@@ -41,7 +41,7 @@ export function AdMock({ isOpen, onClose }: AdMockProps) {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-[10001] bg-black flex flex-col items-center justify-center p-4">
             {/* Top Bar */}
             <div className="absolute top-0 inset-x-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
                 <div className="flex items-center gap-3">

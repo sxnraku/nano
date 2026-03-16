@@ -25,27 +25,48 @@ export async function showRewardedAd(): Promise<boolean> {
             adId: REWARDED_AD_UNIT_ID,
         };
 
+        console.log('AdMob: Preparing ad...');
         await AdMob.prepareRewardVideoAd(options);
+        console.log('AdMob: Ad prepared');
 
         return new Promise(async (resolve) => {
+            // Safety timeout after 30 seconds
+            const timeout = setTimeout(() => {
+                console.warn('AdMob: Ad timeout reached');
+                rewardListener.remove();
+                dismissListener.remove();
+                failedListener.remove();
+                resolve(false);
+            }, 30000);
+
             const rewardListener = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward: AdMobRewardItem) => {
                 console.log('AdMob: Reward received', reward);
+                clearTimeout(timeout);
                 rewardListener.remove();
+                dismissListener.remove();
+                failedListener.remove();
                 resolve(true);
             });
 
             const dismissListener = await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
                 console.log('AdMob: Ad dismissed');
+                clearTimeout(timeout);
+                rewardListener.remove();
                 dismissListener.remove();
+                failedListener.remove();
                 resolve(false);
             });
 
             const failedListener = await AdMob.addListener(RewardAdPluginEvents.FailedToLoad, (error) => {
                 console.error('AdMob: Failed to load', error);
+                clearTimeout(timeout);
+                rewardListener.remove();
+                dismissListener.remove();
                 failedListener.remove();
                 resolve(false);
             });
 
+            console.log('AdMob: Showing ad...');
             await AdMob.showRewardVideoAd();
         });
     } catch (error) {

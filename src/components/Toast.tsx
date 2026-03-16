@@ -16,7 +16,7 @@ interface ToastContainerProps {
 
 export function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
   return (
-    <div className="fixed top-6 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none px-4 sm:px-0">
+    <div className="fixed top-6 right-6 z-[10002] flex flex-col items-end gap-3 pointer-events-none px-4 sm:px-0">
       <AnimatePresence mode="popLayout">
         {toasts.map((toast) => (
           <motion.div

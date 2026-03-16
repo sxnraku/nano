@@ -120,14 +120,17 @@ export default function App() {
 
   // Initialization and Auth logic
   useEffect(() => {
-    const handleInitAuth = async () => {
-      await initAuth();
-    };
-    handleInitAuth();
+    initAuth().then(() => {
+      setAuthInitialized(true);
+      initializeAdMob(); // Initialize AdMob on mobile
+    }).catch(err => {
+      console.error("Auth init failed", err);
+      setAuthError(err.message);
+      setAuthInitialized(true);
+    });
 
     const unsubscribe = auth.onAuthStateChanged((u) => {
       setUser(u);
-      setAuthInitialized(true);
     });
 
     return () => unsubscribe();
@@ -825,13 +828,18 @@ export default function App() {
   const handleWatchAd = async (): Promise<boolean> => {
     return new Promise(async (resolve) => {
       adCallback.current = resolve;
-      // Try real ad first
-      const success = await showRewardedAd();
-      if (success) {
-        handleAdFinished(true);
-      } else {
-        // If AdMob fails or returns false (e.g. on web), show MockAd
-        setIsAdModalOpen(true);
+      try {
+        // Try real ad first
+        const success = await showRewardedAd();
+        if (success) {
+          handleAdFinished(true);
+        } else {
+          // If AdMob fails or returns false (e.g. on web), show MockAd
+          setIsAdModalOpen(true);
+        }
+      } catch (err) {
+        console.error("Watch ad error:", err);
+        setIsAdModalOpen(true); // Fallback to mock on crash
       }
     });
   };
