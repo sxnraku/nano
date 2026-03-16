@@ -10,7 +10,8 @@ function getAI() {
   
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is missing. Check your environment configuration.");
+    console.warn("GEMINI_API_KEY is missing. Safe Mode (Mock) active.");
+    return null; // Return null so callers can handle safe mode
   }
   
   aiInstance = new GoogleGenAI({ apiKey });
@@ -142,8 +143,28 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
     }
   `;
 
+  const genAI = getAI();
+
+  if (!genAI) {
+    // Safe Mode: Return a high-quality "Anomaly" warrior
+    console.log("Safe Mode: Generating Anomaly warrior (No API Key)");
+    return {
+      id: generateId(),
+      name: "ANOMALY-X",
+      class: "System Phantom",
+      element: "Void",
+      rarity: "Rare",
+      description: "A warrior materialized from raw system data because the primary uplink (API Key) was offline.",
+      visualPrompt: "Gritty urban warrior with glitch effects",
+      originalObject: "Missing Link",
+      stats: { hp: 800, atk: 70, def: 60, spd: 90 },
+      imageUrl: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
+      passive: { id: 'flow', name: 'System Ghost', description: 'Unstable data makes them hard to hit.', effect: 'dodge_chance', value: 0.15 }
+    };
+  }
+
   try {
-    const response = await getAI().models.generateContent({
+    const response = await genAI.models.generateContent({
       model: model,
       contents: {
         parts: [
@@ -198,6 +219,12 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
     default: stylePrompt = "Urban punk manga style. VERY AGGRESSIVE THICK INK OUTLINES. Heavy grit and trash-punk aesthetic like Kei Urana's art. High contrast cel-shaded with messy cross-hatching and dirty textures. TRASH-PUNK REUSE/RECYCLE theme."; break;
   }
 
+  const genAI = getAI();
+  if (!genAI) {
+    console.log("Safe Mode: Using fallback image URL (No API Key)");
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " gachiakuta style, thick lines, punk anime")}.png?width=512&height=512&nologo=true`;
+  }
+
   try {
     const enhancedPrompt = `TRANSFORM the provided image into a FICTIONAL stylized warrior. 
     STYLE: ${stylePrompt}.
@@ -217,7 +244,7 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
       parts.unshift({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
     }
 
-    const response = await getAI().models.generateContent({
+    const response = await genAI.models.generateContent({
       model: model,
       contents: {
         parts: parts
@@ -293,8 +320,19 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: 
     For stats, perform a weighted average of the two warriors and add a bonus of ${isPremium ? '60-100%' : '30-50%'}.
   `;
 
+  const genAI = getAI();
+  if (!genAI) {
+    return {
+      ...w1,
+      id: generateId(),
+      name: `${w1.name}-${w2.name.substring(0, 3)}`,
+      description: `Emergency Fusion of ${w1.name} and ${w2.name}.`,
+      originalObject: "Fusion Anomaly"
+    };
+  }
+
   try {
-    const response = await getAI().models.generateContent({
+    const response = await genAI.models.generateContent({
       model: model,
       contents: {
         parts: [{ text: prompt }]

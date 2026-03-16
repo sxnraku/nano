@@ -99,6 +99,11 @@ export default function App() {
 
   // Initialize
   useEffect(() => {
+    console.log("NANOVERSE: App Component Mounted. State:", {
+      view,
+      isScanModalOpen,
+      authInitialized
+    });
     initializeAdMob();
     initAuth();
   }, []);
@@ -324,6 +329,12 @@ export default function App() {
   };
 
   const handleScan = async (imageData: string) => {
+    console.log("NANOVERSE: handleScan called!", { 
+      hasImageData: !!imageData, 
+      view, 
+      isScanModalOpen,
+      isProcessing 
+    });
     if ((playerStats.scanEnergy || 0) <= 0) {
       addToast(t.toast_energy_depleted, "error");
       setIsScanModalOpen(false);
