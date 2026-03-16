@@ -232,7 +232,7 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
   }
 }
 
-export async function fuseWarriors(w1: WarriorData, w2: WarriorData): Promise<WarriorData> {
+export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: boolean = false): Promise<WarriorData> {
   const model = "gemini-2.5-flash";
   
   const prompt = `
@@ -247,6 +247,7 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData): Promise<Wa
     - A raridade deve ser a maior entre os dois, ou uma acima se forem iguais. (Valores permitidos: "Common", "Rare", "Epic", "Legendary")
     - A descrição deve explicar a fusão.
     - O visualPrompt deve combinar as características visuais de ambos.
+    ${isPremium ? '- ESTA É UMA FUSÃO PREMIUM: Garanta que a raridade seja pelo menos EPIC ou LEGENDARY. Os stats devem ter um bônus maior (25-40%).' : ''}
     
     Retorne APENAS um objeto JSON com a seguinte estrutura (sem markdown):
     {
@@ -259,7 +260,7 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData): Promise<Wa
       "stats": { "hp": number, "atk": number, "def": number, "spd": number }
     }
     
-    Para os stats, faça uma média ponderada dos dois guerreiros e adicione um bônus de 10-20%.
+    Para os stats, faça uma média ponderada dos dois guerreiros e adicione um bônus de ${isPremium ? '25-40%' : '10-20%'}.
   `;
 
   try {
