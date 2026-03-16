@@ -1066,9 +1066,8 @@ export default function App() {
             }
           }}
           onWin={(performance) => {
-            const rewards = handleBattleWin(activeBattle.mode, performance);
-            // setActiveBattle(null) is called inside onWin handlers if they don't want to show summary
-            // But handleBattleWin now returns rewards for use in components if needed.
+            handleBattleWin(activeBattle.mode, performance);
+            setActiveBattle(null);
           }}
           onLoss={() => {
             addToast(t.battle_defeat || "Defeat...", "error");
