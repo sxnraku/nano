@@ -1034,6 +1034,7 @@ export default function App() {
           mode={activeBattle.mode}
           pvpSessionId={activeBattle.pvpSessionId}
           isHost={activeBattle.isPvPHost}
+          userId={user?.uid}
           onClose={() => setActiveBattle(null)}
           totalTrophies={playerStats.elo || 1000}
           unlockedTrophies={playerStats.trophies}

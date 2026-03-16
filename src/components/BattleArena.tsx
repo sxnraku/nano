@@ -344,12 +344,27 @@ export function BattleArena({
     if (!isPvP || !pvpSessionId) return;
 
     const unsubscribe = subscribeToPvPSession(pvpSessionId, (session) => {
+      // Sync HP
       if (isHost) {
         setPlayerHp(session.hostHp * 5);
         setOpponentHp(session.guestHp * 5);
       } else {
         setPlayerHp(session.guestHp * 5);
         setOpponentHp(session.hostHp * 5);
+      }
+
+      // Sync Opponent Data (Replace mock)
+      if (opponentTeam[0].id.includes('MOCK') || opponentTeam[0].name === 'Glitch-Wolf') {
+        try {
+          const rivalWarriorData = isHost ? session.guestWarrior : session.hostWarrior;
+          if (rivalWarriorData) {
+            const rival = JSON.parse(rivalWarriorData);
+            setOpponentTeam([rival]);
+            setOpponentHp(rival.stats.hp * 5);
+          }
+        } catch (e) {
+          console.error("Error parsing rival data:", e);
+        }
       }
       
       if (session.status === 'finished' && gameStatus === 'active') {
@@ -359,7 +374,17 @@ export function BattleArena({
     });
 
     return () => unsubscribe();
-  }, [isPvP, pvpSessionId, isHost, gameStatus]);
+  }, [isPvP, pvpSessionId, isHost, gameStatus, userId]);
+
+  // Update updatePvPStats calls to ensure winnerId is present
+  const handleWinStatsUpdate = () => {
+    if (isPvP && pvpSessionId && userId) {
+      updatePvPStats(pvpSessionId, { 
+        status: 'finished', 
+        winnerId: userId 
+      });
+    }
+  };
 
   // Status Effects Loop (Burn, Regen)
   useEffect(() => {
@@ -567,10 +592,7 @@ export function BattleArena({
       updatePvPStats(pvpSessionId, { [targetHPField]: Math.floor(newOppHp / 5) });
       
       if (newOppHp <= 0) {
-        updatePvPStats(pvpSessionId, { 
-          status: 'finished', 
-          winnerId: userId 
-        });
+        handleWinStatsUpdate();
       }
     }
 
