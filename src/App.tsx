@@ -83,7 +83,13 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en');
+  const [language, setLanguage] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem('language');
+      if (saved === 'en' || saved === 'pt') return saved;
+    } catch (e) { console.error("LS Error", e); }
+    return 'en';
+  });
   const t = translations[language];
 
 
