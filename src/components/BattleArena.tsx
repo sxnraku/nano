@@ -219,8 +219,8 @@ export function BattleArena({
 
   // Game State
   // Game State
-  const [playerHp, setPlayerHp] = useState(effectivePlayerStats.hp * 5);
-  const [opponentHp, setOpponentHp] = useState(currentOpponent.stats.hp * 5); 
+  const [playerHp, setPlayerHp] = useState(effectivePlayerStats.hp * 10);
+  const [opponentHp, setOpponentHp] = useState(currentOpponent.stats.hp * 10); 
   const [playerEnergy, setPlayerEnergy] = useState(0);
   const [combo, setCombo] = useState(0);
   const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active');
@@ -346,11 +346,11 @@ export function BattleArena({
     const unsubscribe = subscribeToPvPSession(pvpSessionId, (session) => {
       // Sync HP
       if (isHost) {
-        setPlayerHp(session.hostHp * 5);
-        setOpponentHp(session.guestHp * 5);
+        setPlayerHp(session.hostHp * 10);
+        setOpponentHp(session.guestHp * 10);
       } else {
-        setPlayerHp(session.guestHp * 5);
-        setOpponentHp(session.hostHp * 5);
+        setPlayerHp(session.guestHp * 10);
+        setOpponentHp(session.hostHp * 10);
       }
 
       // Sync Opponent Data (Replace mock)
@@ -360,7 +360,7 @@ export function BattleArena({
           if (rivalWarriorData) {
             const rival = JSON.parse(rivalWarriorData);
             setOpponentTeam([rival]);
-            setOpponentHp(rival.stats.hp * 5);
+            setOpponentHp(rival.stats.hp * 10);
           }
         } catch (e) {
           console.error("Error parsing rival data:", e);
@@ -406,8 +406,8 @@ export function BattleArena({
         setPlayerHp(prev => Math.max(0, prev - playerBurnDamage));
         spawnDamageNumber(playerBurnDamage, 'player', false, undefined, undefined, t.battle_burn_status);
       }
-      if (playerRegen > 0 && playerHp < effectivePlayerStats.hp * 5) {
-        setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 5, prev + playerRegen));
+      if (playerRegen > 0 && playerHp < effectivePlayerStats.hp * 10) {
+        setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 10, prev + playerRegen));
         // spawnDamageNumber(playerRegen, 'player', false, undefined, undefined, 'HEAL'); // Too spammy?
       }
 
@@ -464,7 +464,7 @@ export function BattleArena({
 
     setOpponentTeam([scaledOpponent]);
     setCurrentOpponentIdx(0);
-    setOpponentHp(scaledOpponent.stats.hp * 5);
+    setOpponentHp(scaledOpponent.stats.hp * 10);
     setOpponentEffects([]); // Clear effects on new opponent
     setIsFlashActive(false); // Reset flash
 
@@ -538,13 +538,13 @@ export function BattleArena({
     setComboTimerKey(prev => prev + 1);
 
     // Calculate Damage
-    const baseDmg = Math.max(10, Math.round(effectivePlayerStats.atk * 0.25)); // Balanced for fast combat
+    const baseDmg = Math.max(10, Math.round(effectivePlayerStats.atk * 0.18)); // Balanced for longer combat
     const comboMultiplier = 1 + (combo * 0.05);
     const elementMultiplier = getElementalMultiplier(player, currentOpponent);
 
     // Passive: Adrenaline (Berserker)
     let passiveMultiplier = 1;
-    if (player.passive?.effect === 'damage_boost_low_hp' && playerHp < (effectivePlayerStats.hp * 5) * 0.4) {
+    if (player.passive?.effect === 'damage_boost_low_hp' && playerHp < (effectivePlayerStats.hp * 10) * 0.4) {
       passiveMultiplier += player.passive.value;
     }
     passiveMultiplier += teamSynergy.atk;
@@ -589,9 +589,10 @@ export function BattleArena({
     // PvP Real-time Sync
     if (isPvP && pvpSessionId) {
       const targetHPField = isHost ? 'guestHp' : 'hostHp';
-      updatePvPStats(pvpSessionId, { [targetHPField]: Math.floor(newOppHp / 5) });
+      updatePvPStats(pvpSessionId, { [targetHPField]: Math.floor(newOppHp / 10) });
       
       if (newOppHp <= 0) {
+        setGameStatus('won'); // Trigger local win immediately
         handleWinStatsUpdate();
       }
     }
@@ -693,8 +694,8 @@ export function BattleArena({
       const synergy = synergyRef.current;
       const pEffects = playerEffectsRef.current;
 
-      // Opponent damage - Balanced for fast combat
-      const baseDmg = Math.max(15, Math.round(currentOpp.stats.atk * 0.22)); 
+      // Opponent damage - Balanced for longer combat
+      const baseDmg = Math.max(15, Math.round(currentOpp.stats.atk * 0.18)); 
       const elementMultiplier = getElementalMultiplier(currentOpp, currentPlayer);
       let damage = Math.round(baseDmg * elementMultiplier);
 
@@ -762,7 +763,7 @@ export function BattleArena({
         const nextPlayer = playerTeam[nextIdx];
         const nextWeapon = inventory.find(w => w.id === nextPlayer.equippedWeaponId);
         const nextStats = getEffectiveStats(nextPlayer, nextWeapon);
-        setPlayerHp(nextStats.hp * 5);
+        setPlayerHp(nextStats.hp * 10);
         setPlayerEnergy(0);
         playSFX('HIT');
         vibrate(200);
@@ -791,7 +792,7 @@ export function BattleArena({
         const nextIdx = currentOpponentIdx + 1;
         setCurrentOpponentIdx(nextIdx);
         const nextOpponent = opponentTeam[nextIdx];
-        setOpponentHp(nextOpponent.stats.hp * 5);
+        setOpponentHp(nextOpponent.stats.hp * 10);
         playSFX('HIT');
         vibrate(100);
         spawnDamageNumber(0, 'opponent', false, 50, 50);
@@ -852,7 +853,7 @@ export function BattleArena({
       };
       setOpponentTeam([boss]);
       setCurrentOpponentIdx(0);
-      setOpponentHp(boss.stats.hp * 5); // Consistent multiplier
+      setOpponentHp(boss.stats.hp * 10); // Consistent 10x multiplier
     }
     // setGameStatus('active'); - redundant, already active by default
     if (mode === 'boss' && onRaidDamage) {
@@ -1043,12 +1044,12 @@ export function BattleArena({
               </div>
 
               {/* HP Bar - Brutalist Style */}
-              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white ${mode === 'boss' ? 'w-80 h-12' : 'w-64 h-10'} rotate-2 shadow-[8px_8px_0_#000]`}>
+              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white overflow-hidden ${mode === 'boss' ? 'w-80 h-12' : 'w-64 h-10'} rotate-2 shadow-[8px_8px_0_#000]`}>
                 <div className="absolute inset-0 bg-noise opacity-30" />
                 <motion.div
                   className={`h-full ${mode === 'boss' ? 'bg-purple-600' : 'bg-red-600'} relative`}
                   initial={{ width: '100%' }}
-                   animate={{ width: `${(opponentHp / (currentOpponent.stats.hp * 5)) * 100}%` }}
+                   animate={{ width: `${Math.max(0, Math.min(100, (opponentHp / (currentOpponent.stats.hp * 10)) * 100))}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
@@ -1139,12 +1140,12 @@ export function BattleArena({
               </div>
 
               {/* HP Bar - Player */}
-              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-72 h-12 bg-black border-[4px] border-white -rotate-2 shadow-[-8px_8px_0_#000]">
+              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-72 h-12 bg-black border-[4px] border-white overflow-hidden -rotate-2 shadow-[-8px_8px_0_#000]">
                 <div className="absolute inset-0 bg-noise opacity-30" />
                 <motion.div
                   className="h-full bg-cyan-500 relative"
                   initial={{ width: '100%' }}
-                   animate={{ width: `${(playerHp / (effectivePlayerStats.hp * 5)) * 100}%` }}
+                   animate={{ width: `${Math.max(0, Math.min(100, (playerHp / (effectivePlayerStats.hp * 10)) * 100))}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
