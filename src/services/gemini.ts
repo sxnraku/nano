@@ -1,5 +1,6 @@
 import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import { compressImage } from "./imageUtils";
+import { generateId } from "./utils";
 
 // Initialize the client with the default environment key
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -156,7 +157,7 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
 
     return {
       ...data,
-      id: crypto.randomUUID(),
+      id: generateId(),
       passive,
       originalObject: data.originalObject || "Scan Object"
     };
@@ -302,7 +303,7 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: 
 
     return {
       ...data,
-      id: crypto.randomUUID(),
+      id: generateId(),
       originalObject: `Fusion: ${w1.name} + ${w2.name}`,
       passive
     };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Database, Zap } from 'lucide-react';
+import { generateId } from '../services/utils';
 
 interface Particle {
   id: string;
@@ -59,7 +60,7 @@ export function ParticleSystem() {
 
       for (let i = 0; i < particleCount; i++) {
         newParticles.push({
-          id: crypto.randomUUID(),
+          id: generateId(),
           type,
           x: startX + (Math.random() * 40 - 20),
           y: startY + (Math.random() * 40 - 20),

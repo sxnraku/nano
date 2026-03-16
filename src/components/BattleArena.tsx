@@ -9,6 +9,7 @@ import { translations, type Language } from '../services/localizationService';
 import { MOCK_OPPONENTS } from '../data/mocks';
 import { Haptics } from '@capacitor/haptics';
 import { subscribeToPvPSession, updatePvPStats, type PVPSession } from '../services/firebase';
+import { generateId } from '../services/utils';
 
 // Haptic Feedback Utility
 const vibrate = async (pattern: number | number[]) => {
@@ -400,7 +401,8 @@ export function BattleArena({
   const getNextOpponent = () => {
     const random = MOCK_OPPONENTS[Math.floor(Math.random() * MOCK_OPPONENTS.length)];
     // Ensure we don't get the same one immediately if possible, but for mocks it's fine
-    return { ...random, id: crypto.randomUUID() }; // New ID to trigger animations
+    return { ...random,    id: generateId(),
+ }; // New ID to trigger animations
   };
 
   // Next Wave / Opponent Logic
