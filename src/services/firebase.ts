@@ -65,6 +65,7 @@ export interface UserProfile {
     lastQuestDate: string; // "YYYY-MM-DD"
   };
   guildRole?: 'leader' | 'coleader' | 'member' | null;
+  trophies?: string[];
 }
 
 export interface Guild {
@@ -667,3 +668,44 @@ export const initRaidBoss = async (guildId: string, level: number) => {
     }
   });
 };
+
+// Trophy System Logic
+export async function checkAndUnlockTrophies(userId: string, currentProfile: UserProfile): Promise<string[]> {
+  try {
+    const { TROPHIES } = await import('../data/trophies');
+    const unlockedTrophies = currentProfile.trophies || [];
+    const newUnlocks: string[] = [];
+
+    TROPHIES.forEach(trophy => {
+      if (unlockedTrophies.includes(trophy.id)) return;
+
+      let met = false;
+      const { type, value } = trophy.requirement;
+
+      switch (type) {
+        case 'wins': met = currentProfile.totalWins >= value; break;
+        case 'level': met = currentProfile.level >= value; break;
+        case 'combo': met = currentProfile.highestCombo >= value; break;
+        case 'collection': met = currentProfile.collectionSize >= value; break;
+        case 'wave': met = currentProfile.highestWave >= value; break;
+      }
+
+      if (met) {
+        newUnlocks.push(trophy.id);
+      }
+    });
+
+    if (newUnlocks.length > 0) {
+      const updatedTrophies = [...unlockedTrophies, ...newUnlocks];
+      await updateDoc(doc(db, 'users', userId), {
+        trophies: updatedTrophies
+      });
+      return newUnlocks;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error checking trophies:', error);
+    return [];
+  }
+}

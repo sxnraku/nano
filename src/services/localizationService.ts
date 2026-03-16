@@ -6,6 +6,24 @@ export interface Translation {
     nav_gang: string;
     nav_arena: string;
     nav_settings: string;
+    nav_clan: string;
+    nav_profile: string;
+
+    // Trophies
+    trophies_title: string;
+    trophies_subtitle: string;
+    trophies_unlocked: string;
+
+    // Ranks
+    rank_title: string;
+    rank_0: string;
+    rank_1: string;
+    rank_2: string;
+    rank_3: string;
+    rank_4: string;
+    rank_5: string;
+    rank_6: string;
+    rank_7: string;
 
     // Arena
     arena_title: string;
@@ -348,6 +366,20 @@ export const translations: Record<Language, Translation> = {
         nav_gang: 'GANG',
         nav_arena: 'ARENA',
         nav_settings: 'SETTINGS',
+        nav_clan: 'CLAN',
+        nav_profile: 'PROFILE',
+        trophies_title: 'ACHIEVEMENTS',
+        trophies_subtitle: 'YOUR HALL OF FAME',
+        trophies_unlocked: 'Unlocked Trophies',
+        rank_title: "Street Rank",
+        rank_0: "Rookie",
+        rank_1: "Street Prowler",
+        rank_2: "Fighter",
+        rank_3: "Enforcer",
+        rank_4: "Lieutenant",
+        rank_5: "Underboss",
+        rank_6: "Gang Boss",
+        rank_7: "NanoVerse Legend",
         arena_title: 'BATTLE ARENA',
         arena_subtitle: 'Fame and reward await the winners.',
         mode_survival_title: 'Survival',
@@ -656,6 +688,20 @@ export const translations: Record<Language, Translation> = {
         nav_gang: 'GANGUE',
         nav_arena: 'ARENA',
         nav_settings: 'OPÇÕES',
+        nav_clan: 'CLÃ',
+        nav_profile: 'PERFIL',
+        trophies_title: 'CONQUISTAS',
+        trophies_subtitle: 'HALL DA FAMA',
+        trophies_unlocked: 'Troféus Desbloqueados',
+        rank_title: "Rank de Rua",
+        rank_0: "Recruta",
+        rank_1: "Vagabundo de Rua",
+        rank_2: "Lutador",
+        rank_3: "Executor",
+        rank_4: "Tenente",
+        rank_5: "Sub-Chefe",
+        rank_6: "Chefe de Gangue",
+        rank_7: "Lenda do NanoVerse",
         arena_title: 'ARENA DE BATALHA',
         arena_subtitle: 'Fama e recompensa aguardam os vencedores.',
         mode_survival_title: 'Sobrevivência',

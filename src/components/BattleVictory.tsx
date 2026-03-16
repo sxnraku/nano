@@ -2,6 +2,9 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Star, Zap } from 'lucide-react';
 import type { WarriorData } from '../services/gemini';
+import { TROPHIES } from '../data/trophies';
+import { getRankByTrophies } from '../data/ranks';
+import { translations, Language } from '../services/localizationService';
 import { useAudio } from '../services/audioService';
 
 interface BattleVictoryProps {
@@ -19,6 +22,9 @@ interface BattleVictoryProps {
     xp: number;
     scrap: number;
   };
+  unlockedTrophies?: string[];
+  totalTrophies?: number;
+  language?: Language;
   onContinue: () => void;
 }
 
@@ -42,8 +48,10 @@ function getRank(stats: BattleVictoryProps['stats'], player: WarriorData) {
   return { letter: 'C', color: 'text-zinc-400', bg: 'bg-zinc-600', border: 'border-zinc-400', shadow: '' };
 }
 
-export function BattleVictory({ player, opponent, mode, stats, rewards, onContinue }: BattleVictoryProps) {
+export function BattleVictory({ player, opponent, mode, stats, rewards, unlockedTrophies, totalTrophies, language = 'en', onContinue }: BattleVictoryProps) {
   const rank = getRank(stats, player);
+  const playerRank = getRankByTrophies(totalTrophies || 0);
+  const t = translations[language];
   const { playSFX } = useAudio();
 
   React.useEffect(() => {
@@ -86,6 +94,22 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, onContin
           <div className="inline-block mt-2 bg-red-600 text-white px-6 py-1.5 border-4 border-black font-black uppercase text-[10px] tracking-[0.3em] rotate-2 shadow-[4px_4px_0_#000] gachi-skew">
             {mode === 'boss' ? 'CHAMPION DEFEATED' : mode === 'gang_war' ? 'RIVAL GANG CRUSHED' : 'STREETS CLEANED'}
           </div>
+
+          {/* New: Player Street Rank Display */}
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            className="mt-4 flex flex-col items-center gap-1"
+          >
+            <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-[0.2em]">{t.rank_title}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{playerRank.icon}</span>
+              <span className={`font-marker text-xl italic ${playerRank.color} text-stroke-sm`}>
+                {(t as any)[playerRank.nameKey]}
+              </span>
+            </div>
+          </motion.div>
         </motion.div>
 
         {/* Rank Badge + VS */}
@@ -203,6 +227,42 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, onContin
             </div>
           </div>
         </motion.div>
+
+        {/* Unlocked Trophies Overlay */}
+        <AnimatePresence>
+          {unlockedTrophies && unlockedTrophies.length > 0 && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, rotate: -5 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              className="w-full bg-yellow-400 border-4 border-black p-4 shadow-[10px_10px_0_#000] rotate-1 z-50"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="bg-black p-2">
+                  <Trophy className="w-6 h-6 text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-black font-black uppercase text-xl italic leading-none">TROPHIES UNLOCKED!</h3>
+                  <p className="text-black text-[10px] font-bold uppercase">Legacy Recorded in the Hall of Fame</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {unlockedTrophies.map(tId => {
+                  const trophy = TROPHIES.find(t => t.id === tId);
+                  if (!trophy) return null;
+                  return (
+                    <div key={tId} className="bg-black text-white px-3 py-2 border-2 border-black flex items-center gap-2 group relative">
+                      <span className="text-2xl">{trophy.icon}</span>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase leading-none">{trophy.name}</span>
+                        <span className="text-[7px] font-bold text-zinc-500 uppercase">{trophy.rarity}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Continue Button */}
         <motion.button

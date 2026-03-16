@@ -45,6 +45,7 @@ export interface PlayerStats {
   highestBlitzScore: number;
   highestCombo: number;
   guildId?: string | null;
+  trophies: string[];
 }
 
 export const INITIAL_STATS: PlayerStats = {
@@ -96,7 +97,8 @@ export const INITIAL_STATS: PlayerStats = {
   highestWave: 0,
   highestBlitzScore: 0,
   highestCombo: 0,
-  guildId: null
+  guildId: null,
+  trophies: []
 };
 
 interface ProgressionSystemProps {

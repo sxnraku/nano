@@ -22,7 +22,7 @@ import { initializeAdMob, showRewardedAd } from './services/adService';
 import { ChallengeHandler } from './components/ChallengeHandler';
 import { Gangs } from './components/Gangs';
 import { PvPLobby } from './components/PvPLobby';
-import { updateChallengeStats, updateUserStats, cleanupPvPSession, auth, signIn, logout, syncCloudSave, getCloudSave, initAuth, signInWithEmail, signUpWithEmail, enterMatchmaking, cancelMatchmaking, listenForMatch, findMatch, createMatchFromEntry, attackRaidBoss } from './services/firebase';
+import { updateChallengeStats, updateUserStats, cleanupPvPSession, auth, signIn, logout, syncCloudSave, getCloudSave, initAuth, signInWithEmail, signUpWithEmail, enterMatchmaking, cancelMatchmaking, listenForMatch, findMatch, createMatchFromEntry, attackRaidBoss, checkAndUnlockTrophies } from './services/firebase';
 import type { User } from 'firebase/auth';
 import { UsernamePromptModal } from './components/UsernamePromptModal';
 import { translations, type Language } from './services/localizationService';
@@ -31,6 +31,8 @@ import { GachiIcon } from './components/GachiIcon';
 import { saveCollection, loadCollection, clearAllData } from './services/storage';
 
 import { FusionChamber } from './components/FusionChamber';
+import { TROPHIES } from './data/trophies';
+import { getRankByTrophies } from './data/ranks';
 import { ParticleSystem, spawnParticles } from './components/ParticleSystem';
 
 export default function App() {
@@ -51,6 +53,7 @@ export default function App() {
     isPvPHost?: boolean,
     guildId?: string
   } | null>(null);
+  const [newlyUnlockedTrophies, setNewlyUnlockedTrophies] = useState<string[]>([]);
 
   const handleNavigate = (newView: 'scan' | 'collection' | 'arena' | 'guilds' | 'settings' | 'profile') => {
     setView(newView);
@@ -259,11 +262,11 @@ export default function App() {
     localStorage.setItem('nano-verse-stats', JSON.stringify(playerStats));
   }, [playerStats]);
 
-  // Sync stats to Firebase
+  // Sync stats to Firebase and check trophies
   useEffect(() => {
-    const syncStats = async () => {
+    const syncAndCheck = async () => {
       if (auth.currentUser) {
-        await updateUserStats(auth.currentUser.uid, {
+        const statsToSync = {
           totalWins: playerStats.totalWins,
           collectionSize: collection.length,
           level: playerStats.level,
@@ -271,10 +274,34 @@ export default function App() {
           highestWave: playerStats.highestWave,
           highestBlitzScore: playerStats.highestBlitzScore,
           highestCombo: playerStats.highestCombo
-        });
+        };
+        
+        await updateUserStats(auth.currentUser.uid, statsToSync);
+        
+        // Check for trophies
+        const currentProfileLookalike = {
+          ...statsToSync,
+          uid: auth.currentUser.uid,
+          displayName: auth.currentUser.displayName || 'Agent',
+          trophies: playerStats.trophies || []
+        } as any;
+        
+        const newTrophies = await checkAndUnlockTrophies(auth.currentUser.uid, currentProfileLookalike);
+        if (newTrophies.length > 0) {
+          setPlayerStats(prev => ({
+            ...prev,
+            trophies: [...(prev.trophies || []), ...newTrophies]
+          }));
+          
+          setNewlyUnlockedTrophies(newTrophies);
+          
+          newTrophies.forEach(() => {
+            addToast("🏆 TROPHY UNLOCKED!", "success");
+          });
+        }
       }
     };
-    syncStats();
+    syncAndCheck();
   }, [playerStats.totalWins, collection.length, playerStats.level, playerStats.scrap, playerStats.highestWave, playerStats.highestBlitzScore, playerStats.highestCombo]);
 
 
@@ -590,6 +617,7 @@ export default function App() {
         return { ...random, id: crypto.randomUUID() };
       });
 
+      setNewlyUnlockedTrophies([]);
       setActiveBattle({
         opponent: opponentTeam[0],
         opponentTeam,
@@ -726,18 +754,21 @@ export default function App() {
       } else if (mode === 'boss') {
         // Find the toughest mock opponent or just pick one and scale it
         const randomOpponent = MOCK_OPPONENTS[Math.floor(Math.random() * MOCK_OPPONENTS.length)];
-        setActiveBattle({ opponent: randomOpponent, mode: 'boss' });
+        setNewlyUnlockedTrophies([]);
+    setActiveBattle({ opponent: randomOpponent, mode: 'boss' });
         addToast(t.toast_boss_detected, "error");
       } else {
         // For Survival/Blitz, start immediately with a random opponent
         const randomOpponent = MOCK_OPPONENTS[Math.floor(Math.random() * MOCK_OPPONENTS.length)];
-        setActiveBattle({ opponent: randomOpponent, mode });
+        setNewlyUnlockedTrophies([]);
+    setActiveBattle({ opponent: randomOpponent, mode });
       }
     }, 1500);
   };
 
   const startBattle = (opponent: WarriorData) => {
     if (!currentWarrior) return;
+    setNewlyUnlockedTrophies([]);
     setActiveBattle({ opponent, mode: 'classic' });
   };
 
@@ -1003,6 +1034,7 @@ export default function App() {
           language={language}
           onRaidDamage={handleRaidDamage}
           userId={user?.uid}
+          totalTrophies={playerStats.trophies?.length || 0}
           onWin={(performanceOrId) => {
             if (activeBattle.mode === 'gang_war') {
               handleGangWarWin(performanceOrId as string);
@@ -1804,6 +1836,65 @@ export default function App() {
                     <span className="text-zinc-400 text-sm font-bold uppercase">{t.info_version}</span>
                     <span className="text-white font-mono text-xs">v2.0.0-stable</span>
                   </div>
+
+                  {/* Rank Section */}
+                  <div className="mt-8 bg-zinc-950 border-4 border-black p-4 shadow-[8px_8px_0_#000] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                      <Trophy className="w-16 h-16" />
+                    </div>
+                    <div className="relative z-10">
+                      <h4 className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mb-1">{t.rank_title}</h4>
+                      <div className="flex items-center gap-4">
+                        <div className="text-4xl">
+                          {getRankByTrophies(playerStats.trophies?.length || 0).icon}
+                        </div>
+                        <div>
+                          <div className={`text-2xl font-marker italic text-stroke-sm ${getRankByTrophies(playerStats.trophies?.length || 0).color}`}>
+                            {(t as any)[getRankByTrophies(playerStats.trophies?.length || 0).nameKey]}
+                          </div>
+                          <div className="text-white font-black text-[9px] uppercase tracking-widest mt-1">
+                            {playerStats.trophies?.length || 0} / {TROPHIES.length} TROPHIES
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Progress bar to next rank */}
+                    <div className="mt-4 h-1.5 bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${((playerStats.trophies?.length || 0) / TROPHIES.length) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-cyan-500 to-yellow-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Trophies Section */}
+                  <div className="mt-8">
+                    <h4 className="text-yellow-400 font-marker text-xl mb-4 uppercase italic tracking-tighter">{t.trophies_title}</h4>
+                    <div className="grid grid-cols-4 gap-3">
+                      {TROPHIES.map(trophy => {
+                        const isUnlocked = playerStats.trophies?.includes(trophy.id);
+                        return (
+                          <div 
+                            key={trophy.id} 
+                            className={`relative group flex flex-col items-center p-2 border-2 ${isUnlocked ? 'bg-zinc-800 border-yellow-500 shadow-[3px_3px_0_#000]' : 'bg-black border-zinc-900 opacity-30 grayscale'} transition-all`}
+                          >
+                            <span className={`text-2xl mb-1 ${isUnlocked ? 'drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]' : ''}`}>
+                              {trophy.icon}
+                            </span>
+                            <span className="text-[7px] font-black text-white uppercase text-center leading-none">{trophy.name}</span>
+                            
+                            {/* Tooltip on hover */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-black border border-white p-2 text-[8px] font-bold text-white z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-center shadow-xl">
+                              <div className="text-yellow-400 mb-1">{trophy.name}</div>
+                              {trophy.description}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1902,7 +1993,7 @@ export default function App() {
                 active={view === 'profile'}
                 onClick={() => handleNavigate('profile')}
                 icon={<div className="bg-white border border-black w-8 h-8 flex items-center justify-center rotate-2"><UserCircle className="w-6 h-6 text-black" /></div>}
-                label={language === 'pt' ? 'Perfil' : 'Profile'}
+                label={t.nav_profile}
               />
               <div className="w-1.5 h-10 bg-zinc-800 mx-1 -skew-x-12 shrink-0 pointer-events-none" />
               <NavButton
