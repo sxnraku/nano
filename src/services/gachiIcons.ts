@@ -14,6 +14,13 @@ const EMOJI_ICONS: Record<string, string> = {
   NANITE: '💎',
 };
 
+const LOCAL_ICONS: Partial<Record<string, string>> = {
+  HP: '/icons/HP.png',
+  ATK: '/icons/ATK.png',
+  DEF: '/icons/DEF.png',
+  SPD: '/icons/SPD.png',
+};
+
 export const GACHI_ICON_PROMPTS = {
   SCRAP: "a rusty scrap metal gear with jagged edges, gachiakuta style ink sketch, high contrast black and white",
   HP: "a mechanical cybernetic heart with glowing red wires, trash-punk aesthetic, messy ink outlines",
@@ -28,10 +35,12 @@ export const GACHI_ICON_PROMPTS = {
 };
 
 export async function getGachiIcon(type: keyof typeof GACHI_ICON_PROMPTS): Promise<string> {
-  // Check cache first - if user had previously generated icons, use them
+  // Check local files first
+  if (LOCAL_ICONS[type]) return LOCAL_ICONS[type]!;
+
+  // Check cache (Generated via AI during session)
   const cached = await loadIcon(type);
   if (cached) return cached;
 
-  // Return empty string - GachiIcon component handles emoji fallback
   return "";
 }

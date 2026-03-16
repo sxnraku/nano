@@ -2,21 +2,9 @@ import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import { compressImage } from "./imageUtils";
 import { generateId } from "./utils";
 
-// Lazy initialize the client to prevent startup crashes if the key is missing
-let aiInstance: GoogleGenAI | null = null;
-
-function getAI() {
-  if (aiInstance) return aiInstance;
-  
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY is missing. Safe Mode (Mock) active.");
-    return null; // Return null so callers can handle safe mode
-  }
-  
-  aiInstance = new GoogleGenAI({ apiKey });
-  return aiInstance;
-}
+// Initialize the client with the default environment key
+// This allows using the free tier key injected by AI Studio
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export interface WarriorStats {
   hp: number;
@@ -65,15 +53,15 @@ export interface WarriorData {
 }
 
 const PASSIVES: Record<string, PassiveAbility> = {
-  IRON_CLAD: { id: 'iron_clad', name: 'Iron Clad', description: '-15% Damage Received', effect: 'defense_boost', value: 0.15 },
-  ADRENALINE: { id: 'adrenaline', name: 'Adrenaline', description: '+30% Damage with Low HP', effect: 'damage_boost_low_hp', value: 0.30 },
-  OVERCLOCK: { id: 'overclock', name: 'Overclock', description: '+20% Energy Gain', effect: 'energy_boost', value: 0.20 },
-  PHOTOSYNTHESIS: { id: 'photosynthesis', name: 'Photosynthesis', description: 'Slowly regenerates HP', effect: 'regen', value: 0.01 },
-  VOLTAGE: { id: 'voltage', name: 'Voltage', description: 'Chance to Stun', effect: 'stun_chance', value: 0.10 },
-  FLOW: { id: 'flow', name: 'Flow', description: 'Dodge Chance', effect: 'dodge_chance', value: 0.15 },
-  INFERNO: { id: 'inferno', name: 'Inferno', description: 'Burn Chance', effect: 'burn_chance', value: 0.15 },
-  VAMPIRE: { id: 'vampire', name: 'Vampirism', description: 'Heals when attacking', effect: 'lifesteal', value: 0.10 },
-  PRECISION: { id: 'precision', name: 'Precision', description: '+Critical Chance', effect: 'crit_boost', value: 0.15 },
+  IRON_CLAD: { id: 'iron_clad', name: 'Pele de Ferro', description: '-15% Dano Recebido', effect: 'defense_boost', value: 0.15 },
+  ADRENALINE: { id: 'adrenaline', name: 'Adrenalina', description: '+30% Dano com HP Baixo', effect: 'damage_boost_low_hp', value: 0.30 },
+  OVERCLOCK: { id: 'overclock', name: 'Overclock', description: '+20% Ganho de Energia', effect: 'energy_boost', value: 0.20 },
+  PHOTOSYNTHESIS: { id: 'photosynthesis', name: 'Fotossíntese', description: 'Regenera HP lentamente', effect: 'regen', value: 0.01 },
+  VOLTAGE: { id: 'voltage', name: 'Voltagem', description: 'Chance de Atordoar', effect: 'stun_chance', value: 0.10 },
+  FLOW: { id: 'flow', name: 'Fluxo', description: 'Chance de Esquiva', effect: 'dodge_chance', value: 0.15 },
+  INFERNO: { id: 'inferno', name: 'Inferno', description: 'Chance de Queimar', effect: 'burn_chance', value: 0.15 },
+  VAMPIRE: { id: 'vampire', name: 'Vampirismo', description: 'Cura ao atacar', effect: 'lifesteal', value: 0.10 },
+  PRECISION: { id: 'precision', name: 'Precisão', description: '+Chance Crítica', effect: 'crit_boost', value: 0.15 },
 };
 
 export function assignPassive(warriorClass: string, element: string): PassiveAbility {
@@ -81,17 +69,17 @@ export function assignPassive(warriorClass: string, element: string): PassiveAbi
   const elm = (element || '').toLowerCase();
 
   // Element priorities
-  if (elm.includes('fire') || elm.includes('magma') || elm.includes('lava')) return PASSIVES.INFERNO;
-  if (elm.includes('electric') || elm.includes('bolt') || elm.includes('thunder') || elm.includes('energy')) return PASSIVES.VOLTAGE;
-  if (elm.includes('plant') || elm.includes('earth') || elm.includes('nature') || elm.includes('forest')) return PASSIVES.PHOTOSYNTHESIS;
-  if (elm.includes('water') || elm.includes('ice') || elm.includes('ocean') || elm.includes('sea')) return PASSIVES.FLOW;
-
+  if (elm.includes('fogo') || elm.includes('magma') || elm.includes('brasa')) return PASSIVES.INFERNO;
+  if (elm.includes('elétrico') || elm.includes('raio') || elm.includes('trovão') || elm.includes('energia')) return PASSIVES.VOLTAGE;
+  if (elm.includes('planta') || elm.includes('terra') || elm.includes('natureza') || elm.includes('floresta')) return PASSIVES.PHOTOSYNTHESIS;
+  if (elm.includes('água') || elm.includes('gelo') || elm.includes('mar') || elm.includes('rio')) return PASSIVES.FLOW;
+  
   // Class priorities
-  if (cls.includes('tank') || cls.includes('shield') || cls.includes('builder') || cls.includes('defender') || cls.includes('brute')) return PASSIVES.IRON_CLAD;
-  if (cls.includes('berserker') || cls.includes('blade') || cls.includes('warrior') || cls.includes('fighter') || cls.includes('barbarian')) return PASSIVES.ADRENALINE;
-  if (cls.includes('technomage') || cls.includes('hacker') || cls.includes('cyber') || cls.includes('mage') || cls.includes('support')) return PASSIVES.OVERCLOCK;
-  if (cls.includes('assassin') || cls.includes('ninja') || cls.includes('sniper') || cls.includes('stealth') || cls.includes('fast')) return PASSIVES.PRECISION;
-  if (cls.includes('vampire') || cls.includes('dark') || cls.includes('shadow') || cls.includes('night')) return PASSIVES.VAMPIRE;
+  if (cls.includes('tanque') || cls.includes('escudo') || cls.includes('construtor') || cls.includes('defensor') || cls.includes('robusto')) return PASSIVES.IRON_CLAD;
+  if (cls.includes('berserker') || cls.includes('lâmina') || cls.includes('guerreiro') || cls.includes('lutador') || cls.includes('bárbaro')) return PASSIVES.ADRENALINE;
+  if (cls.includes('tecnomago') || cls.includes('hacker') || cls.includes('cyber') || cls.includes('mago') || cls.includes('suporte')) return PASSIVES.OVERCLOCK;
+  if (cls.includes('assassino') || cls.includes('ninja') || cls.includes('sniper') || cls.includes('furtivo') || cls.includes('rápido')) return PASSIVES.PRECISION;
+  if (cls.includes('vampiro') || cls.includes('sombrio') || cls.includes('trevas') || cls.includes('noturno')) return PASSIVES.VAMPIRE;
 
   // Default fallback based on stats if available, otherwise generic
   return PASSIVES.PRECISION;
@@ -101,70 +89,46 @@ export function assignPassive(warriorClass: string, element: string): PassiveAbi
  * Analyzes an image and generates warrior metadata.
  */
 export async function analyzeAndCreateWarrior(base64Image: string): Promise<WarriorData> {
-  const model = "gemini-2.5-flash"; 
+  const model = "gemini-2.5-flash"; // Using Flash for fast text/json generation
 
   const prompt = `
-    Analyze this image. Identify the main object, its color, material, and utility.
-    IMPORTANT: Also analyze the POSE and EXPRESSION (e.g., tongue out, arms crossed, smiling) of the subject/object in the photo.
+    Analise esta imagem. Identifique o objeto principal, sua cor, material e utilidade.
+    IMPORTANTE: Analise também a POSE e a EXPRESSÃO (ex: língua para fora, braços cruzados, sorrindo) do sujeito/objeto na foto.
 
-    Based on this, create an RPG character "Nano Verse".
+    Com base nisso, crie um personagem guerreiro RPG "Nano Verse".
     
-    Creation Rules:
-    - If it's a PERSON -> Transform MUST BE TOTAL. Create an unrecognizable fictional character (Cyborg, Elemental, masked Ninja, or Robotic Warrior).
-    - PRIVACY & RIGHTS: DO NOT create a realistic human likeness. Replace real faces with helmets, masks, holographic visors, or stylized non-human facial features.
-    - CONFIDENTIALITY: If real-world logos, documents, or private objects are detected, REPLACE them with "NanoVerse" symbols, fictional tech, or glowing power cores.
-    - If it's an electronic object -> Technomage or Cyber-Warrior.
-    - If it's plant/natural -> Elemental or Druid.
-    - If it's a tool -> Berserker or Builder.
-    - Be creative with the name and class.
-    - IMPORTANT: RESPOND EVERYTHING IN ENGLISH.
+    Regras de Criação:
+    - Se for um objeto eletrônico -> Tecnomago ou Cyber-Guerreiro.
+    - Se for planta/natural -> Elemental ou Druida.
+    - Se for ferramenta -> Berserker ou Construtor.
+    - Seja criativo com o nome e a classe.
 
-    Rarity Rules (based on complexity/uniqueness):
-    - Common (60%): Simple, everyday objects (pen, bottle, stone). Total stats ~800, HP around 500.
-    - Rare (30%): Objects with some interesting detail or brand. Total stats ~1200, HP around 750.
-    - Epic (9%): Complex, electronic, artistic objects. Total stats ~1600, HP around 1000.
-    - Legendary (1%): Very unique, rare or apparent sentimental value objects. Total stats ~2500, HP around 1500.
+    Regras de Raridade (baseado na complexidade/unicidade do objeto):
+    - Common (60%): Objetos simples, cotidianos (caneta, garrafa, pedra). Stats totais ~200.
+    - Rare (30%): Objetos com algum detalhe interessante ou marca. Stats totais ~250.
+    - Epic (9%): Objetos complexos, eletrônicos, artísticos. Stats totais ~300.
+    - Legendary (1%): Objetos muito únicos, raros ou com valor sentimental aparente. Stats totais ~380.
     
-    Return ONLY a JSON object with the following structure:
+    Retorne APENAS um objeto JSON com a seguinte estrutura (sem markdown):
     {
-      "name": "Warrior Name",
-      "class": "Class (e.g., Long Range Technomage)",
-      "element": "Element (e.g., Electric, Fire, Plant)",
+      "name": "Nome do Guerreiro",
+      "class": "Classe (ex: Tecnomago de Longo Alcance)",
+      "element": "Elemento (ex: Elétrico, Fogo, Planta)",
       "rarity": "Common" | "Rare" | "Epic" | "Legendary",
-      "description": "A brief description of personality and origin.",
-      "visualPrompt": "Character in GACHIAKUTA MANGA STYLE (by Kei Urana). VERY AGGRESSIVE, THICK, UNEVEN INK OUTLINES. Heavy TRASH-PUNK and urban aesthetic. High contrast cel-shading with gritty cross-hatching details. The character MUST BE A FICTIONAL ENTITY (no real humans). If original was a person, replace face with a complex scrap-metal mask, a gas mask, or a full-head hood inspired by Gachiakuta's 'Cleaners'. The character MUST BE IN THE SAME POSE AND HAVE THE SAME FACIAL EXPRESSION AS THE ORIGINAL PHOTO (e.g., [describe the identified pose/expression]). Saturated but dirty neon colors. Abstract background with urban debris or messy graffiti. ABSOLUTELY NO REAL LIKENESS OR REAL-WORLD LOGOS.",
-      "originalObject": "Identified object name",
+      "description": "Uma breve descrição da personalidade e origem.",
+      "visualPrompt": "Personagem estilo MANGA PUNK / GRAFFITI, traços grossos de nanquim, sombras duras (sem degradê suave), cores vibrantes e saturadas (amarelo neon, roxo, ciano). Estilo visual urbano e estilizado. O personagem DEVE ESTAR NA MESMA POSE AND HAVE THE SAME FACIAL EXPRESSION AS THE ORIGINAL PHOTO (ex: [descreva a pose/expressão identificada]). Aparência urbana, suja mas estilosa, com contornos pretos bem definidos. Fundo abstrato com graffiti.",
+      "originalObject": "Nome do objeto identificado",
       "stats": {
-        "hp": 500,
-        "atk": 100,
-        "def": 100,
-        "spd": 100
+        "hp": 100,
+        "atk": 50,
+        "def": 50,
+        "spd": 50
       }
     }
   `;
 
-  const genAI = getAI();
-
-  if (!genAI) {
-    // Safe Mode: Return a high-quality "Anomaly" warrior
-    console.log("Safe Mode: Generating Anomaly warrior (No API Key)");
-    return {
-      id: generateId(),
-      name: "ANOMALY-X",
-      class: "System Phantom",
-      element: "Void",
-      rarity: "Rare",
-      description: "A warrior materialized from raw system data because the primary uplink (API Key) was offline.",
-      visualPrompt: "Gritty urban warrior with glitch effects",
-      originalObject: "Missing Link",
-      stats: { hp: 800, atk: 70, def: 60, spd: 90 },
-      imageUrl: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop",
-      passive: { id: 'flow', name: 'System Ghost', description: 'Unstable data makes them hard to hit.', effect: 'dodge_chance', value: 0.15 }
-    };
-  }
-
   try {
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: model,
       contents: {
         parts: [
@@ -179,12 +143,12 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
 
     const text = response.text;
     if (!text) throw new Error("No response from AI");
-
+    
     // Clean up markdown code blocks if present
     const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
-
+    
     const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'>;
-
+    
     // Assign passive based on class/element
     const passive = assignPassive(data.class, data.element);
 
@@ -206,47 +170,37 @@ export type WarriorStyle = 'Default' | 'Glitch' | 'Neon' | 'Cyber' | 'Dark' | 'R
  * Generates the visual avatar for the warrior.
  */
 export async function generateWarriorImage(visualPrompt: string, base64Image?: string, style: WarriorStyle = 'Default'): Promise<string> {
-  const model = "gemini-2.5-flash"; 
+  // Switched to gemini-2.5-flash-image (Nano Banana) which supports free tier keys
+  const model = "gemini-2.5-flash-image"; 
 
   let stylePrompt = "";
-  switch (style) {
-    case 'Glitch': stylePrompt = "GLITCH ART style, digital distortion, datamosh, visual glitches, separated RGB colors, static noise."; break;
-    case 'Neon': stylePrompt = "NEON NOIR style, bright lights, high contrast, cyan and magenta, intense glow, night atmosphere."; break;
-    case 'Cyber': stylePrompt = "CYBERPUNK style, circuits, chrome metal, tech implants, futuristic HUD, wires and cables."; break;
-    case 'Dark': stylePrompt = "DARK FANTASY style, deep shadows, gothic atmosphere, desaturated colors, menacing look, smoke."; break;
-    case 'Retro': stylePrompt = "RETRO 80s ANIME style, pastel colors, film grain, VHS aesthetic, lo-fi."; break;
-    default: stylePrompt = "Urban punk manga style. VERY AGGRESSIVE THICK INK OUTLINES. Heavy grit and trash-punk aesthetic like Kei Urana's art. High contrast cel-shaded with messy cross-hatching and dirty textures. TRASH-PUNK REUSE/RECYCLE theme."; break;
-  }
-
-  const genAI = getAI();
-  if (!genAI) {
-    console.log("Safe Mode: Using fallback image URL (No API Key)");
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " gachiakuta style, thick lines, punk anime")}.png?width=512&height=512&nologo=true`;
+  switch(style) {
+    case 'Glitch': stylePrompt = "Estilo GLITCH ART, distorção digital, datamosh, falhas visuais, cores RGB separadas, ruído estático."; break;
+    case 'Neon': stylePrompt = "Estilo NEON NOIR, luzes brilhantes, contraste alto, ciano e magenta, brilho intenso, atmosfera noturna."; break;
+    case 'Cyber': stylePrompt = "Estilo CYBERPUNK, circuitos, metal cromado, implantes tecnológicos, HUD futurista, fios e cabos."; break;
+    case 'Dark': stylePrompt = "Estilo DARK FANTASY, sombras profundas, atmosfera gótica, cores desaturadas, visual ameaçador, fumaça."; break;
+    case 'Retro': stylePrompt = "Estilo RETRO 80s ANIME, cores pastéis, granulado de filme, estética VHS, lo-fi."; break;
+    default: stylePrompt = "Estilo MANGA PUNK / GRAFFITI ART. Traços pretos grossos e definidos (ink outlines). Sombras duras (cel-shading agressivo)."; break;
   }
 
   try {
-    const enhancedPrompt = `TRANSFORM the provided image into a FICTIONAL stylized warrior. 
-    STYLE: ${stylePrompt}.
-    MANDATORY: 
-    1. KEEP THE EXACT POSE, COMPOSITION, AND CAMERA ANGLE of the original photo.
-    2. KEEP THE FACIAL EXPRESSION of the original person/object.
-    3. REPLACE the person with a fictional character: Use a mask, mechanical parts, or stylized features. 
-    4. NO REAL PHOTOGRAPHIC ELEMENTS. Everything must look hand-drawn.
-    5. The character is inspired by ${visualPrompt}. 
-    6. Background should be abstract urban debris and neon graffiti.
-    7. No real people or brands.`;
+    const enhancedPrompt = `${visualPrompt} ${stylePrompt} Cores vibrantes e saturadas. Estética urbana e estilizada. Fundo abstrato com formas geométricas ou graffiti. A imagem deve respeitar a pose e expressão descritas.`;
 
     const parts: any[] = [{ text: enhancedPrompt }];
-
+    
     // If we have the original image, use it as a reference for the pose/structure
     if (base64Image) {
       parts.unshift({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
     }
 
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: model,
       contents: {
         parts: parts
+      },
+      config: {
+        // responseMimeType is not supported for image generation models in this SDK version usually,
+        // but we just need the image output.
       }
     });
 
@@ -267,67 +221,49 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
         }
       }
     }
-
+    
     throw new Error("No image data found in response");
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    if (base64Image) {
-      // Fallback to Pollinations.ai for better visual coherence if Gemini fails or is restricted
-      const seed = Math.floor(Math.random() * 999999);
-      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " gachiakuta style, thick lines, punk anime, urban, ink")}.png?width=512&height=512&nologo=true&seed=${seed}`;
-      return pollinationsUrl;
-    }
-    throw error;
+  } catch (error) {
+    console.error("Error generating warrior image:", error);
+    // Log the error for debugging
+    console.warn("Gemini Image generation failed, falling back to Pollinations for stability");
+    const seed = Math.floor(Math.random() * 999999);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " manga punk graffiti urban")}.png?width=512&height=512&nologo=true&seed=${seed}`;
   }
 }
 
-export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: boolean = false): Promise<WarriorData> {
+export async function fuseWarriors(w1: WarriorData, w2: WarriorData): Promise<WarriorData> {
   const model = "gemini-2.5-flash";
-
+  
   const prompt = `
-    WARRIOR FUSION:
-    Warrior 1: ${w1.name} (${w1.class}, ${w1.element}). Description: ${w1.description}. Visual: ${w1.visualPrompt}
-    Warrior 2: ${w2.name} (${w2.class}, ${w2.element}). Description: ${w2.description}. Visual: ${w2.visualPrompt}
+    FUSÃO DE GUERREIROS:
+    Guerreiro 1: ${w1.name} (${w1.class}, ${w1.element}). Descrição: ${w1.description}. Visual: ${w1.visualPrompt}
+    Guerreiro 2: ${w2.name} (${w2.class}, ${w2.element}). Descrição: ${w2.description}. Visual: ${w2.visualPrompt}
     
-    MODE: ${isPremium ? 'STABILIZED (PREMIUM)' : 'NORMAL'}
+    Crie um NOVO guerreiro que seja uma FUSÃO destes dois.
+    - O nome deve ser uma combinação criativa.
+    - A classe deve ser híbrida.
+    - O elemento deve ser uma mistura ou o mais forte dos dois.
+    - A raridade deve ser a maior entre os dois, ou uma acima se forem iguais. (Valores permitidos: "Common", "Rare", "Epic", "Legendary")
+    - A descrição deve explicar a fusão.
+    - O visualPrompt deve combinar as características visuais de ambos.
     
-    Create a NEW warrior that is a FUSION of these two.
-    - The name should be a creative combination.
-    - The class should be hybrid.
-    - The element should be a mix or the strongest of the two.
-    - The rarity should be the highest of the two, or one above if they are the same. (Allowed values: "Common", "Rare", "Epic", "Legendary")
-    ${isPremium ? '- PREMIUM GUARANTEE: The rarity MUST BE AT LEAST "Epic" or "Legendary".' : ''}
-    - The description should explain the fusion.
-    - The visualPrompt should combine visual characteristics of both.
-    - IMPORTANT: RESPOND EVERYTHING IN ENGLISH.
-    
-    Return ONLY a JSON object with the following structure (no markdown):
+    Retorne APENAS um objeto JSON com a seguinte estrutura (sem markdown):
     {
-      "name": "Fusion Name",
-      "class": "Hybrid Class",
-      "element": "Hybrid Element",
+      "name": "Nome da Fusão",
+      "class": "Classe Híbrida",
+      "element": "Elemento Híbrido",
       "rarity": "Common" | "Rare" | "Epic" | "Legendary",
-      "description": "Description",
-      "visualPrompt": "Combined visual prompt",
+      "description": "Descrição",
+      "visualPrompt": "Prompt visual combinado",
       "stats": { "hp": number, "atk": number, "def": number, "spd": number }
     }
     
-    For stats, perform a weighted average of the two warriors and add a bonus of ${isPremium ? '60-100%' : '30-50%'}.
+    Para os stats, faça uma média ponderada dos dois guerreiros e adicione um bônus de 10-20%.
   `;
 
-  const genAI = getAI();
-  if (!genAI) {
-    return {
-      ...w1,
-      id: generateId(),
-      name: `${w1.name}-${w2.name.substring(0, 3)}`,
-      description: `Emergency Fusion of ${w1.name} and ${w2.name}.`,
-      originalObject: "Fusion Anomaly"
-    };
-  }
-
   try {
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: model,
       contents: {
         parts: [{ text: prompt }]
@@ -339,17 +275,17 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: 
 
     const text = response.text;
     if (!text) throw new Error("No response from AI");
-
+    
     const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'>;
-
+    
     // Assign passive based on class/element
     const passive = assignPassive(data.class, data.element);
 
     return {
       ...data,
       id: generateId(),
-      originalObject: `Fusion: ${w1.name} + ${w2.name}`,
+      originalObject: `Fusão: ${w1.name} + ${w2.name}`,
       passive
     };
   } catch (error) {

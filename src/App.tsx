@@ -29,7 +29,6 @@ import { translations, type Language } from './services/localizationService';
 
 import { GachiIcon } from './components/GachiIcon';
 import { saveCollection, loadCollection, clearAllData } from './services/storage';
-import { generateId } from './services/utils';
 
 import { FusionChamber } from './components/FusionChamber';
 import { ParticleSystem, spawnParticles } from './components/ParticleSystem';
@@ -83,13 +82,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [language, setLanguage] = useState<Language>(() => {
-    try {
-      const saved = localStorage.getItem('language');
-      if (saved === 'en' || saved === 'pt') return saved;
-    } catch (e) { console.error("LS Error", e); }
-    return 'en';
-  });
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en');
   const t = translations[language];
 
 
@@ -99,11 +92,6 @@ export default function App() {
 
   // Initialize
   useEffect(() => {
-    console.log("NANOVERSE: App Component Mounted. State:", {
-      view,
-      isScanModalOpen,
-      authInitialized
-    });
     initializeAdMob();
     initAuth();
   }, []);
@@ -151,7 +139,7 @@ export default function App() {
 
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = generateId();
+    const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => removeToast(id), 4000);
   };
@@ -329,12 +317,6 @@ export default function App() {
   };
 
   const handleScan = async (imageData: string) => {
-    console.log("NANOVERSE: handleScan called!", { 
-      hasImageData: !!imageData, 
-      view, 
-      isScanModalOpen,
-      isProcessing 
-    });
     if ((playerStats.scanEnergy || 0) <= 0) {
       addToast(t.toast_energy_depleted, "error");
       setIsScanModalOpen(false);
@@ -605,7 +587,7 @@ export default function App() {
       // Generate opponent team
       const opponentTeam = Array.from({ length: 3 }).map(() => {
         const random = MOCK_OPPONENTS[Math.floor(Math.random() * MOCK_OPPONENTS.length)];
-        return { ...random, id: generateId() };
+        return { ...random, id: crypto.randomUUID() };
       });
 
       setActiveBattle({
@@ -639,7 +621,7 @@ export default function App() {
     if (activeBattle.isHardcore && stolenWarriorId) {
       const stolenWarrior = activeBattle.opponentTeam.find(w => w.id === stolenWarriorId);
       if (stolenWarrior) {
-        const newWarrior = { ...stolenWarrior, id: generateId() };
+        const newWarrior = { ...stolenWarrior, id: crypto.randomUUID() };
         setCollection(prev => [...prev, newWarrior]);
         addToast(`${newWarrior.name} has been recruited to your gang!`, 'success');
       }
@@ -726,7 +708,7 @@ export default function App() {
 
           return {
             ...opp,
-            id: generateId(),
+            id: crypto.randomUUID(),
             name: isElite ? `${t.elite_prefix} ${opp.name}` : opp.name,
             isElite,
             threatLevel: threat,
@@ -1099,7 +1081,6 @@ export default function App() {
           <div className="flex items-center gap-1 sm:gap-2 mt-1 w-full justify-between">
             {/* Scrap Badge */}
             <button
-              id="scrap-counter"
               onClick={() => setIsBlackMarketOpen(true)}
               className="flex-1 min-w-0 bg-red-600 border-2 sm:border-[4px] border-black p-1 sm:p-1.5 flex items-center gap-1 sm:gap-2 shadow-[2px_2px_0_rgba(0,0,0,1)] sm:shadow-[4px_4px_0_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all hover:bg-red-500 hover:scale-[1.02]"
             >
@@ -1116,7 +1097,6 @@ export default function App() {
 
             {/* Level Badge */}
             <button
-              id="rank-counter"
               onClick={() => setIsProgressionOpen(true)}
               className="flex-1 min-w-0 bg-cyan-600 border-2 sm:border-[4px] border-black p-1 sm:p-1.5 flex items-center gap-1 sm:gap-2 shadow-[2px_2px_0_rgba(0,0,0,1)] sm:shadow-[4px_4px_0_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all hover:bg-cyan-500 hover:scale-[1.02] z-10 relative"
             >
@@ -1915,7 +1895,7 @@ export default function App() {
                 active={view === 'guilds'}
                 onClick={() => handleNavigate('guilds')}
                 icon={<div className="bg-white border border-black w-8 h-8 flex items-center justify-center -rotate-3"><img src="/icon_cla.png" className="w-6 h-6 object-contain mix-blend-multiply contrast-125 grayscale" alt="clan" /></div>}
-                label={t.nav_gang}
+                label={t.nav_clan}
               />
               <div className="w-1.5 h-10 bg-zinc-800 mx-1 -skew-x-12 shrink-0 pointer-events-none" />
               <NavButton

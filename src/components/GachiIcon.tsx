@@ -31,11 +31,9 @@ export function GachiIcon({ type, className = "w-6 h-6", fallback }: GachiIconPr
     let isMounted = true;
     const fetchIcon = async () => {
       setIsLoading(true);
-      // Only load from cache (IndexedDB/localStorage), never call the API for icons
-      // This prevents wasting image generation quota on small icons
-      const cached = await loadIcon(type);
+      const icon = await getGachiIcon(type);
       if (isMounted) {
-        setIconUrl(cached || null);
+        setIconUrl(icon || null);
         setIsLoading(false);
       }
     };
