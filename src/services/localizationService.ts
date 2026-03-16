@@ -5,7 +5,6 @@ export interface Translation {
     nav_scan: string;
     nav_gang: string;
     nav_arena: string;
-    nav_clan: string;
     nav_settings: string;
 
     // Arena
@@ -348,7 +347,6 @@ export const translations: Record<Language, Translation> = {
         nav_scan: 'SCAN',
         nav_gang: 'GANG',
         nav_arena: 'ARENA',
-        nav_clan: 'CLAN',
         nav_settings: 'SETTINGS',
         arena_title: 'BATTLE ARENA',
         arena_subtitle: 'Fame and reward await the winners.',
@@ -409,7 +407,7 @@ export const translations: Record<Language, Translation> = {
         gangs_dominion: 'Dominion (Trophies)',
         gangs_found_new: 'Found New Gang',
         gangs_name_placeholder: 'Gang Name...',
-        gangs_create_button: 'Create Clan',
+        gangs_create_button: 'Create Gang',
         gangs_contracts_title: 'Gang Contracts',
         gangs_contracts_subtitle: '(Daily Quests)',
         gangs_recruiting_title: 'Gangs Recruiting',
@@ -534,12 +532,12 @@ export const translations: Record<Language, Translation> = {
         legal_terms_tab: 'Terms of Use',
         legal_privacy_tab: 'Privacy',
         legal_acceptance_title: 'Acceptance',
-        legal_acceptance_desc: 'By accessing the NanoVerse ("the Service"), you agree to comply with these Terms of Service. If you do not agree with any part of the terms, you may not access the Service. This is an experimental game prototype.',
+        legal_acceptance_desc: 'By accessing the NanoVerse ("the Service") during its Beta phase, you agree to comply with these Terms of Service. If you do not agree with any part of the terms, you may not access the Service. This is an experimental game prototype provided via Firebase App Distribution for testing purposes.',
         legal_ai_title: 'AI Generated Content',
         legal_ai_desc: 'The Service uses artificial intelligence (Google Gemini) to generate content. You acknowledge that:',
         legal_ai_list1: 'The generated content may be unpredictable or inaccurate.',
         legal_ai_list2: 'You must not use the Service to generate illegal, offensive content or content that violates the rights of third parties.',
-        legal_ai_list3: 'NanoVerse does not claim ownership over the images you submit, but you grant us a license to process them for gameplay purposes.',
+        legal_ai_list3: 'NanoVerse does not claim ownership over the images you submit, but you grant us a license to process them for gameplay purposes. Visual styles are inspired by artistic movements and processed by AI.',
         legal_ip_title: 'Intel Property',
         legal_ip_desc: 'The source code, visual design, and game mechanics are the property of the NanoVerse developers. AI-generated images are for your personal and non-commercial use within the game context.',
         legal_disclaimer_title: 'Disclaimer',
@@ -657,7 +655,6 @@ export const translations: Record<Language, Translation> = {
         nav_scan: 'SCAN',
         nav_gang: 'GANGUE',
         nav_arena: 'ARENA',
-        nav_clan: 'CLÃ',
         nav_settings: 'OPÇÕES',
         arena_title: 'ARENA DE BATALHA',
         arena_subtitle: 'Fama e recompensa aguardam os vencedores.',
@@ -718,7 +715,7 @@ export const translations: Record<Language, Translation> = {
         gangs_dominion: 'Domínio (Troféus)',
         gangs_found_new: 'Fundar Nova Gangue',
         gangs_name_placeholder: 'Nome da Gangue...',
-        gangs_create_button: 'Criar Clã',
+        gangs_create_button: 'Fundar Gangue',
         gangs_contracts_title: 'Contratos da Gangue',
         gangs_contracts_subtitle: '(Missões Diárias)',
         gangs_recruiting_title: 'Gangues Recrutando',
@@ -843,12 +840,12 @@ export const translations: Record<Language, Translation> = {
         legal_terms_tab: 'Termos de Uso',
         legal_privacy_tab: 'Privacidade',
         legal_acceptance_title: 'Aceitação',
-        legal_acceptance_desc: 'Ao acessar o NanoVerse ("o Serviço"), você concorda em cumprir estes Termos de Serviço. Se você não concordar com qualquer parte dos termos, não poderá acessar o Serviço. Este é um protótipo de jogo experimental.',
+        legal_acceptance_desc: 'Ao acessar o NanoVerse ("o Serviço") durante a sua fase Beta, você concorda em cumprir estes Termos de Serviço. Se você não concordar com qualquer parte dos termos, não poderá acessar o Serviço. Este é um protótipo de jogo experimental distribuído via Firebase App Distribution para fins de teste.',
         legal_ai_title: 'Conteúdo Gerado por IA',
         legal_ai_desc: 'O Serviço utiliza inteligência artificial (Google Gemini) para gerar conteúdo. Você reconhece que:',
         legal_ai_list1: 'O conteúdo gerado pode ser imprevisível ou impreciso.',
         legal_ai_list2: 'Você não deve usar o Serviço para gerar conteúdo ilegal, ofensivo ou que viole os direitos de terceiros.',
-        legal_ai_list3: 'O NanoVerse não reivindica a propriedade das imagens que você envia, mas você nos concede uma licença para processá-las para fins de jogabilidade.',
+        legal_ai_list3: 'O NanoVerse não reivindica a propriedade das imagens que você envia, mas você nos concede uma licença para processá-las para fins de jogabilidade. Os estilos visuais são inspirados em movimentos artísticos e processados por IA.',
         legal_ip_title: 'Propriedade Intelectual',
         legal_ip_desc: 'O código-fonte, o design visual e as mecânicas de jogo são propriedade dos desenvolvedores do NanoVerse. Imagens geradas por IA são para seu uso pessoal e não comercial dentro do contexto do jogo.',
         legal_disclaimer_title: 'Aviso Legal',
