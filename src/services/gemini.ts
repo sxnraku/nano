@@ -2,8 +2,20 @@ import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import { compressImage } from "./imageUtils";
 import { generateId } from "./utils";
 
-// Initialize the client with the default environment key
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Lazy initialize the client to prevent startup crashes if the key is missing
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (aiInstance) return aiInstance;
+  
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is missing. Check your environment configuration.");
+  }
+  
+  aiInstance = new GoogleGenAI({ apiKey });
+  return aiInstance;
+}
 
 export interface WarriorStats {
   hp: number;
@@ -131,7 +143,7 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: {
         parts: [
@@ -205,7 +217,7 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
       parts.unshift({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
     }
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: {
         parts: parts
@@ -282,7 +294,7 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: 
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: {
         parts: [{ text: prompt }]
