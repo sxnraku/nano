@@ -22,7 +22,8 @@ import { initializeAdMob, showRewardedAd } from './services/adService';
 import { ChallengeHandler } from './components/ChallengeHandler';
 import { Gangs } from './components/Gangs';
 import { PvPLobby } from './components/PvPLobby';
-import { updateChallengeStats, updateUserStats, cleanupPvPSession, auth, signIn, logout, syncCloudSave, getCloudSave, initAuth, signInWithEmail, signUpWithEmail, enterMatchmaking, cancelMatchmaking, listenForMatch, findMatch, createMatchFromEntry, attackRaidBoss, checkAndUnlockTrophies } from './services/firebase';
+import { AllianceInvitation } from './components/AllianceInvitation';
+import { updateChallengeStats, updateUserStats, cleanupPvPSession, auth, signIn, logout, syncCloudSave, getCloudSave, initAuth, signInWithEmail, signUpWithEmail, enterMatchmaking, cancelMatchmaking, listenForMatch, findMatch, createMatchFromEntry, attackRaidBoss, checkAndUnlockTrophies, addFriend } from './services/firebase';
 import type { User } from 'firebase/auth';
 import { UsernamePromptModal } from './components/UsernamePromptModal';
 import { translations, type Language } from './services/localizationService';
@@ -77,6 +78,7 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPvPLobbyOpen, setIsPvPLobbyOpen] = useState(false);
   const [warriorToShare, setWarriorToShare] = useState<WarriorData | null>(null);
+  const [inviteUid, setInviteUid] = useState<string | null>(null);
 
   const [collection, setCollection] = useState<WarriorData[]>([]);
   const [currentWarriorId, setCurrentWarriorId] = useState<string | null>(null);
@@ -765,6 +767,15 @@ export default function App() {
     });
   };
 
+  // Detect Invite Link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    if (invite) {
+      setInviteUid(invite);
+    }
+  }, []);
+
   const handleDoubleRewards = async (): Promise<void> => {
     const success = await handleWatchAd();
     if (success) {
@@ -1119,6 +1130,7 @@ export default function App() {
           <ShareWarriorModal
             onClose={() => setIsShareModalOpen(false)}
             warrior={warriorToShare}
+            language={language}
           />
         )}
       </AnimatePresence>
@@ -1915,6 +1927,23 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {inviteUid && user && (
+        <AllianceInvitation
+          inviterUid={inviteUid}
+          currentUserUid={user.uid}
+          language={language}
+          onClose={() => {
+            setInviteUid(null);
+            const url = new URL(window.location.href);
+            url.searchParams.delete('invite');
+            window.history.replaceState({}, '', url);
+          }}
+          onSuccess={(name) => {
+            addToast(t.share_alliance_success.replace('{name}', name), 'success');
+          }}
+        />
+      )}
     </div>
   );
 }

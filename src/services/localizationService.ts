@@ -364,6 +364,16 @@ export interface Translation {
     arena_match_found: string;
     arena_cancel_search: string;
     loading_reality: string;
+    share_card_title: string;
+    share_card_download: string;
+    share_card_native: string;
+    share_friend_invite: string;
+    share_friend_copy: string;
+    share_alliance_proposal: string;
+    share_alliance_accept: string;
+    share_alliance_ignore: string;
+    share_alliance_success: string;
+    share_alliance_desc: string;
 }
 
 export const translations: Record<Language, Translation> = {
@@ -693,7 +703,17 @@ export const translations: Record<Language, Translation> = {
         arena_searching_match: 'Searching for Opponent...',
         arena_match_found: 'Match Found! Connecting...',
         arena_cancel_search: 'Cancel Search',
-        loading_reality: 'STABILIZING REALITY...'
+        loading_reality: 'STABILIZING REALITY...',
+        share_card_title: 'MATERIALIZE CARD',
+        share_card_download: 'DOWNLOAD PNG',
+        share_card_native: 'SHARE CARD',
+        share_friend_invite: 'FRIEND INVITE',
+        share_friend_copy: 'COPY INVITE LINK',
+        share_alliance_proposal: 'ALLIANCE PROPOSAL',
+        share_alliance_accept: 'ACCEPT ALLIANCE',
+        share_alliance_ignore: 'IGNORE',
+        share_alliance_success: 'Alliance formed with {name}!',
+        share_alliance_desc: '{name} wants to form a strategic alliance with you. Accept?',
     },
     pt: {
         nav_scan: 'SCAN',
@@ -1020,7 +1040,17 @@ export const translations: Record<Language, Translation> = {
         toast_gen_error: 'Erro ao gerar visual. Tenta novamente.',
         arena_searching_match: 'Procurando Oponente...',
         arena_match_found: 'Oponente Encontrado! Conectando...',
-        arena_cancel_search: 'Cancelar Procura',
-        loading_reality: 'ESTABILIZANDO A REALIDADE...'
+        arena_cancel_search: 'Cancelar Busca',
+        loading_reality: 'ESTABILIZANDO REALIDADE...',
+        share_card_title: 'MATERIALIZAR CARTA',
+        share_card_download: 'DESCARREGAR PNG',
+        share_card_native: 'PARTILHAR CARTA',
+        share_friend_invite: 'CONVITE DE AMIGO',
+        share_friend_copy: 'COPIAR LINK DE CONVITE',
+        share_alliance_proposal: 'PROPOSTA DE ALIANÇA',
+        share_alliance_accept: 'ACEITAR ALIANÇA',
+        share_alliance_ignore: 'IGNORAR',
+        share_alliance_success: 'Aliança formada com {name}!',
+        share_alliance_desc: '{name} quer formar uma aliança estratégica contigo. Aceitar?',
     }
 };

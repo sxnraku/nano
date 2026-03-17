@@ -2,21 +2,25 @@ import React, { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { motion } from 'motion/react';
 import { X, Share2, Download, Copy, Check, Zap, Shield, Sword, Heart } from 'lucide-react';
+import { createChallenge, auth } from '../services/firebase';
+import { translations, type Language } from '../services/localizationService';
 import type { WarriorData } from '../services/gemini';
-import { createChallenge } from '../services/firebase';
-import { auth } from '../services/firebase';
 
 interface ShareWarriorModalProps {
   warrior: WarriorData;
   onClose: () => void;
+  language?: Language;
 }
 
-export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) {
+export function ShareWarriorModal({ warrior, onClose, language = 'en' }: ShareWarriorModalProps) {
+  const t = translations[language];
   const cardRef = useRef<HTMLDivElement>(null);
   const [challengeUrl, setChallengeUrl] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   // Generate challenge link automatically on mount if logged in
   useEffect(() => {
@@ -30,8 +34,9 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
     setLoading(true);
     try {
       const challengeId = await createChallenge(warrior, auth.currentUser);
-      const url = `${window.location.origin}/?challenge=${challengeId}`;
-      setChallengeUrl(url);
+      const host = window.location.origin;
+      setChallengeUrl(`${host}/?challenge=${challengeId}`);
+      setInviteUrl(`${host}/?invite=${auth.currentUser.uid}`);
     } catch (error) {
       console.error("Error creating challenge:", error);
     } finally {
@@ -48,16 +53,21 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
       
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: '#000',
-        scale: 3,
+        scale: 2,
         useCORS: true,
         logging: false,
-        allowTaint: true,
+        proxy: undefined, // Don't use proxy
       });
       
+      const fileName = `nanoverse-${warrior.name.toLowerCase().replace(/\s+/g, '-')}.png`;
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+      
       const link = document.createElement('a');
-      link.download = `nanoverse-${warrior.name.toLowerCase().replace(/\s+/g, '-')}.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
+      link.download = fileName;
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (error) {
       console.error("Error downloading card:", error);
     } finally {
@@ -65,11 +75,25 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
     }
   };
 
-  const handleCopyLink = () => {
-    if (challengeUrl) {
-      navigator.clipboard.writeText(challengeUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) return;
+    setSharing(true);
+    try {
+      await navigator.share({
+        title: `NanoVerse - ${warrior.name}`,
+        text: `Check out my new materialized warrior: ${warrior.name}!`,
+        url: challengeUrl || window.location.href,
+      });
+    } catch (e) {
+      console.error("Native share error:", e);
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -94,7 +118,7 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
         <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">Materialize Card</h2>
+            <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">{t.share_card_title}</h2>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-700">
             <X className="w-5 h-5 text-zinc-400" />
@@ -164,42 +188,71 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
           </div>
 
           {/* Actions */}
-          <div className="w-full space-y-4">
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="w-full py-4 bg-white hover:bg-zinc-200 text-black font-black uppercase rounded-lg shadow-[0_4px_0_#ccc] transition-all active:translate-y-[2px] active:shadow-none disabled:opacity-50 flex items-center justify-center gap-3 group"
-            >
-              {downloading ? (
-                <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Download className="w-5 h-5 group-hover:bounce" />
-                  Download PNG Card
-                </>
-              )}
-            </button>
+            <div className="w-full grid grid-cols-2 gap-3">
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="py-3 bg-white hover:bg-zinc-200 text-black text-xs font-black uppercase rounded-lg shadow-[0_4px_0_#ccc] active:shadow-none active:translate-y-1 transition-all flex items-center justify-center gap-2 group"
+              >
+                {downloading ? <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
+                {t.share_card_download}
+              </button>
+              
+              <button
+                onClick={handleNativeShare}
+                disabled={sharing || !navigator.share}
+                className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-black border border-zinc-700 uppercase rounded-lg shadow-[0_4px_0_#000] active:shadow-none active:translate-y-1 transition-all flex items-center justify-center gap-2 disabled:opacity-30"
+              >
+                <Share2 className="w-4 h-4" />
+                {t.share_card_native}
+              </button>
+            </div>
 
-            {challengeUrl && (
-              <div className="pt-4 border-t border-zinc-800 w-full">
-                <p className="text-[10px] text-zinc-500 font-black uppercase mb-2 tracking-widest text-center">Share Battle Link</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={challengeUrl}
-                    className="flex-1 bg-black border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-400 font-mono focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                  <button
-                    onClick={handleCopyLink}
-                    className="px-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg border border-zinc-700 transition-all flex items-center justify-center"
-                    title="Copy Link"
-                  >
-                    {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
-                  </button>
+            <div className="space-y-4 pt-4 border-t border-zinc-900 w-full">
+              {challengeUrl && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase mb-1.5 tracking-widest text-center flex items-center justify-center gap-2">
+                    <span className="h-[1px] w-4 bg-zinc-800" /> {t.mode_pvp_title} LINK <span className="h-[1px] w-4 bg-zinc-800" />
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={challengeUrl}
+                      className="flex-1 bg-black border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-400 font-mono focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleCopy(challengeUrl, 'challenge')}
+                      className="px-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg border border-zinc-800 transition-all flex items-center"
+                    >
+                      {copied === 'challenge' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-zinc-400" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {inviteUrl && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase mb-1.5 tracking-widest text-center flex items-center justify-center gap-2">
+                    <span className="h-[1px] w-4 bg-zinc-800" /> {t.share_friend_invite} <span className="h-[1px] w-4 bg-zinc-800" />
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteUrl}
+                      className="flex-1 bg-black border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-400 font-mono focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleCopy(inviteUrl, 'invite')}
+                      className="px-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg border border-zinc-800 transition-all flex items-center"
+                    >
+                      {copied === 'invite' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-zinc-400" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             
             {!auth.currentUser && (
               <p className="text-[10px] text-zinc-600 text-center italic">
@@ -207,7 +260,6 @@ export function ShareWarriorModal({ warrior, onClose }: ShareWarriorModalProps) 
               </p>
             )}
           </div>
-        </div>
       </motion.div>
     </div>
   );

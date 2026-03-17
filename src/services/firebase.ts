@@ -67,6 +67,7 @@ export interface UserProfile {
   guildRole?: 'leader' | 'coleader' | 'member' | null;
   trophies?: string[];
   elo: number;
+  friends?: string[];
 }
 
 export interface Guild {
@@ -145,7 +146,8 @@ const ensureUserProfile = async (user: User, username?: string) => {
         gangWarWinsToday: 0,
         lastQuestDate: new Date().toISOString().split('T')[0]
       },
-      elo: 1000
+      elo: 1000,
+      friends: []
     });
   } else {
     const updates: any = { lastActive: Timestamp.now() };
@@ -720,3 +722,37 @@ export async function checkAndUnlockTrophies(userId: string, currentProfile: Use
     return [];
   }
 }
+// Friend Functions
+export const addFriend = async (uid: string, friendUid: string) => {
+  if (uid === friendUid) return;
+  try {
+    const userRef = doc(db, 'users', uid);
+    const friendRef = doc(db, 'users', friendUid);
+
+    // Update current user
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const currentFriends = userSnap.data().friends || [];
+      if (!currentFriends.includes(friendUid)) {
+        await updateDoc(userRef, {
+          friends: [...currentFriends, friendUid]
+        });
+      }
+    }
+
+    // Update friend (reciprocal)
+    const friendSnap = await getDoc(friendRef);
+    if (friendSnap.exists()) {
+      const friendFriends = friendSnap.data().friends || [];
+      if (!friendFriends.includes(uid)) {
+        await updateDoc(friendRef, {
+          friends: [...friendFriends, uid]
+        });
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error("Error adding friend:", error);
+    return false;
+  }
+};
