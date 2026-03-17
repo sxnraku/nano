@@ -34,6 +34,9 @@ import { FusionChamber } from './components/FusionChamber';
 import { TROPHIES } from './data/trophies';
 import { getRankByElo } from './data/ranks';
 import { ParticleSystem, spawnParticles } from './components/ParticleSystem';
+import { usePlayerStats } from './hooks/usePlayerStats';
+import { useMatchmaking } from './hooks/useMatchmaking';
+import { LoadingScreen } from './components/LoadingScreen';
 
 export default function App() {
   const [view, setView] = useState<'scan' | 'collection' | 'arena' | 'guilds' | 'settings' | 'profile'>('scan');
@@ -53,25 +56,18 @@ export default function App() {
     isPvPHost?: boolean,
     guildId?: string
   } | null>(null);
-  const [newlyUnlockedTrophies, setNewlyUnlockedTrophies] = useState<string[]>([]);
 
   const handleNavigate = (newView: 'scan' | 'collection' | 'arena' | 'guilds' | 'settings' | 'profile') => {
     setView(newView);
   };
-  const [collection, setCollection] = useState<WarriorData[]>([]);
 
-  const [currentWarriorId, setCurrentWarriorId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isLegalDocsOpen, setIsLegalDocsOpen] = useState(false);
   const [isProgressionOpen, setIsProgressionOpen] = useState(false);
   const [isWarriorDetailsOpen, setIsWarriorDetailsOpen] = useState(false);
   const [isGameGuideOpen, setIsGameGuideOpen] = useState(false);
-  const [isMatchmaking, setIsMatchmaking] = useState(false);
-  const [matchmakingEntryId, setMatchmakingEntryId] = useState<string | null>(null);
-  const [isMatchFound, setIsMatchFound] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [isBlackMarketOpen, setIsBlackMarketOpen] = useState(false);
   const [isGangWarSelectionOpen, setIsGangWarSelectionOpen] = useState(false);
@@ -81,42 +77,46 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPvPLobbyOpen, setIsPvPLobbyOpen] = useState(false);
   const [warriorToShare, setWarriorToShare] = useState<WarriorData | null>(null);
+
+  const [collection, setCollection] = useState<WarriorData[]>([]);
+  const [currentWarriorId, setCurrentWarriorId] = useState<string | null>(null);
+  const [isAppInitialLoading, setIsAppInitialLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+
+  const currentWarrior = useMemo(() => {
+    return collection.find(w => w.id === currentWarriorId) || collection[0] || null;
+  }, [collection, currentWarriorId]);
   
   const [user, setUser] = useState<User | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en');
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = crypto.randomUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => removeToast(id), 4000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
   const t = translations[language];
-  const [playerStats, setPlayerStats] = useState<PlayerStats>(() => {
-    const savedStats = localStorage.getItem('nano-verse-stats');
-    if (savedStats) {
-      try {
-        const stats = JSON.parse(savedStats);
-        const today = new Date().toISOString().split('T')[0];
-        let currentEnergy = stats.scanEnergy ?? 5;
-        let lastDate = stats.lastEnergyDate;
+  const {
+    playerStats,
+    setPlayerStats,
+    newlyUnlockedTrophies,
+    setNewlyUnlockedTrophies,
+    updateStats
+  } = usePlayerStats(collection, addToast, language);
 
-        if (lastDate !== today) {
-          currentEnergy = 5;
-          lastDate = today;
-        }
-
-        return {
-          ...INITIAL_STATS,
-          ...stats,
-          inventory: stats.inventory || [],
-          consumables: stats.consumables || {},
-          activeBuffs: stats.activeBuffs || [],
-          scanEnergy: currentEnergy,
-          lastEnergyDate: lastDate,
-          elo: stats.elo || 1000
-        };
-      } catch (e) {
-        console.error("Failed to parse saved stats", e);
-      }
-    }
-    return INITIAL_STATS;
-  });
+  const {
+    isMatchmaking,
+    isMatchFound,
+    handleStartMatchmaking,
+    handleCancelMatchmaking
+  } = useMatchmaking(user, currentWarrior, playerStats, setActiveBattle, addToast, language);
 
   // Initialization and Auth logic
   useEffect(() => {
@@ -136,15 +136,17 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = crypto.randomUUID();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => removeToast(id), 4000);
-  };
+  // Set initial loading to false when auth is ready
+  useEffect(() => {
+    if (authInitialized) {
+      // Small delay to ensure collection loading has a chance to start
+      const timer = setTimeout(() => {
+        setIsAppInitialLoading(false);
+      }, 1500); // Minimum splash time
+      return () => clearTimeout(timer);
+    }
+  }, [authInitialized]);
 
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
 
   const handleCloudSave = async () => {
     if (!user) return;
@@ -242,91 +244,6 @@ export default function App() {
     }
   }, [collection]);
 
-  // Save stats when they change
-  useEffect(() => {
-    localStorage.setItem('nano-verse-stats', JSON.stringify(playerStats));
-  }, [playerStats]);
-
-  // Sync stats to Firebase and check trophies
-  useEffect(() => {
-    const syncAndCheck = async () => {
-      if (auth.currentUser) {
-        const statsToSync = {
-          totalWins: playerStats.totalWins,
-          collectionSize: collection.length,
-          level: playerStats.level,
-          scrap: playerStats.scrap,
-          highestWave: playerStats.highestWave,
-          highestBlitzScore: playerStats.highestBlitzScore,
-          highestCombo: playerStats.highestCombo
-        };
-        
-        await updateUserStats(auth.currentUser.uid, statsToSync);
-        
-        // Check for trophies
-        const currentProfileLookalike = {
-          ...statsToSync,
-          uid: auth.currentUser.uid,
-          displayName: auth.currentUser.displayName || 'Agent',
-          trophies: playerStats.trophies || []
-        } as any;
-        
-        const newTrophies = await checkAndUnlockTrophies(auth.currentUser.uid, currentProfileLookalike);
-        if (newTrophies.length > 0) {
-          setPlayerStats(prev => ({
-            ...prev,
-            trophies: [...(prev.trophies || []), ...newTrophies]
-          }));
-          
-          setNewlyUnlockedTrophies(newTrophies);
-          
-          newTrophies.forEach(() => {
-            addToast("🏆 TROPHY UNLOCKED!", "success");
-          });
-        }
-      }
-    };
-    syncAndCheck();
-  }, [playerStats.totalWins, collection.length, playerStats.level, playerStats.scrap, playerStats.highestWave, playerStats.highestBlitzScore, playerStats.highestCombo]);
-
-
-  const updateStats = (type: 'scan' | 'battle_win' | 'collection_size', amount: number = 1) => {
-    setPlayerStats(prev => {
-      let newStats = { ...prev };
-
-      // Update totals
-      if (type === 'scan') newStats.totalScans += amount;
-      if (type === 'battle_win') newStats.totalWins += amount;
-
-      // Check Missions
-      newStats.missions = newStats.missions.map(mission => {
-        if (mission.completed) return mission;
-
-        if (mission.type === type) {
-          const newCurrent = type === 'collection_size' ? collection.length : mission.current + amount;
-
-          if (newCurrent >= mission.target) {
-            // Mission Complete!
-            addToast(t.toast_mission_complete.replace('{title}', mission.title).replace('{xp}', mission.rewardXP.toString()), 'success');
-            newStats.xp += mission.rewardXP;
-            return { ...mission, current: newCurrent, completed: true };
-          }
-          return { ...mission, current: newCurrent };
-        }
-        return mission;
-      });
-
-      // Level Up Check
-      if (newStats.xp >= newStats.maxXp) {
-        newStats.level += 1;
-        newStats.xp -= newStats.maxXp;
-        newStats.maxXp = Math.round(newStats.maxXp * 1.5);
-        addToast(`LEVEL UP! You reached level ${newStats.level}!`, 'success');
-      }
-
-      return newStats;
-    });
-  };
 
   const handleScan = async (imageData: string) => {
     if ((playerStats.scanEnergy || 0) <= 0) {
@@ -465,9 +382,6 @@ export default function App() {
     // Trigger Particles
     spawnParticles('scrap', scrapGain, window.innerWidth / 2, window.innerHeight / 2);
   };
-
-  const currentWarrior = collection.find(w => w.id === currentWarriorId) || collection[0];
-
   const handleUpgrade = (stat: 'hp' | 'atk' | 'def' | 'spd', cost: number) => {
     if (!currentWarrior || (playerStats.scrap || 0) < cost) return;
 
@@ -601,6 +515,13 @@ export default function App() {
   };
 
   const handleStartPvPBattle = (sessionId: string, opponent: WarriorData, isHost: boolean) => {
+    if (opponent.id === user?.uid) {
+      console.warn("Caught self-battle attempt. Aborting.");
+      addToast(language === 'pt' ? "Erro: Não podes lutar contra ti próprio!" : "Error: You cannot battle yourself!", "error");
+      cleanupPvPSession(sessionId);
+      return;
+    }
+
     setIsPvPLobbyOpen(false);
     setActiveBattle({
       opponent,
@@ -922,91 +843,16 @@ export default function App() {
     }));
   };
 
-  const handleStartMatchmaking = async () => {
-    if (!currentWarrior || !user) return;
-    
-    setIsMatchmaking(true);
-    setIsMatchFound(false);
-    
-    const tier = Math.floor(playerStats.level / 5);
-    
-    try {
-      console.log("[Matchmaking] Starting search for tier:", tier);
-      const match = await findMatch(tier, user.uid);
-      
-      if (match) {
-        console.log("[Matchmaking] Found existing match entry:", match.id);
-        setIsMatchFound(true);
-        const sessionId = await createMatchFromEntry(match, user, currentWarrior);
-        console.log("[Matchmaking] Created PvP session:", sessionId);
-        setActiveBattle({
-          opponent: JSON.parse(match.warriorData),
-          mode: 'pvp',
-          pvpSessionId: sessionId,
-          isPvPHost: false
-        });
-        setIsMatchmaking(false);
-        setIsMatchFound(false);
-      } else {
-        console.log("[Matchmaking] No immediate match, entering queue...");
-        const entryId = await enterMatchmaking(user, currentWarrior, playerStats.level);
-        console.log("[Matchmaking] Queue entry ID:", entryId);
-        setMatchmakingEntryId(entryId);
-      }
-    } catch (e: any) {
-      console.error("[Matchmaking] Error:", e);
-      addToast(language === 'pt' ? `Erro PvP: ${e.message || 'Desconhecido'}` : `PvP Error: ${e.message || 'Unknown'}`, "error");
-      setIsMatchmaking(false);
-    }
-  };
-
-  const handleCancelMatchmaking = async () => {
-    if (matchmakingEntryId) {
-      await cancelMatchmaking(matchmakingEntryId);
-      setMatchmakingEntryId(null);
-    }
-    setIsMatchmaking(false);
-    setIsMatchFound(false);
-  };
-
-  useEffect(() => {
-    if (matchmakingEntryId) {
-      const unsubscribe = listenForMatch(matchmakingEntryId, async (sessionId) => {
-        setIsMatchFound(true);
-        console.log("[Matchmaking] Match notified! Session:", sessionId);
-        
-        // Fetch session data once to get the opponent data instead of showing a mock
-        // BattleArena also listens to this session, but we need the opponent data NOW for the UI/props
-        try {
-          // We can use a small delay or just rely on BattleArena if it's fast enough,
-          // but to avoid the "mock" flash, we could try to peek at the session.
-          // For now, let's keep it simple: BattleArena will handle the actual sync.
-          // However, we MUST NOT use MOCK_OPPONENTS[0] if we want to avoid the user seeing it.
-          
-          setActiveBattle({
-            opponent: MOCK_OPPONENTS[0], // We still need a placeholder because BattleArena requires it,
-            // but we'll mark it as 'pvp' so it shows "Syncing..." or similar.
-            mode: 'pvp',
-            pvpSessionId: sessionId,
-            isPvPHost: true
-          });
-        } catch (e) {
-          console.error("Error setting up match:", e);
-        }
-        
-        // Cleanup matchmaking entry
-        cancelMatchmaking(matchmakingEntryId);
-        setMatchmakingEntryId(null);
-        setIsMatchmaking(false);
-        setIsMatchFound(false);
-      });
-      return () => unsubscribe();
-    }
-  }, [matchmakingEntryId]);
 
   if (authInitialized && !user) {
     return (
       <div className="h-[100dvh] w-full bg-[#0b0b0b] text-white font-sans selection:bg-yellow-400 selection:text-black relative overflow-hidden bg-noise flex flex-col">
+        {showSplash && (
+          <LoadingScreen 
+            isLoading={isAppInitialLoading} 
+            onFadeComplete={() => setShowSplash(false)} 
+          />
+        )}
         <ToastContainer toasts={toasts} removeToast={removeToast} />
         <UsernamePromptModal
           onSubmit={handleAnonymousSignIn}
@@ -1020,6 +866,12 @@ export default function App() {
 
   return (
     <div className="h-[100dvh] w-full bg-[#0b0b0b] text-white font-sans selection:bg-yellow-400 selection:text-black relative overflow-hidden bg-noise flex flex-col pt-safe pb-safe">
+      {showSplash && (
+        <LoadingScreen 
+          isLoading={isAppInitialLoading} 
+          onFadeComplete={() => setShowSplash(false)} 
+        />
+      )}
       <div className="scanlines" />
       <ParticleSystem />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -1033,48 +885,58 @@ export default function App() {
       </div>
 
       {/* Battle Modal */}
-      {activeBattle && currentWarrior && (
-        <BattleArena
-          player={activeBattle.playerTeam ? activeBattle.playerTeam[0] : currentWarrior}
-          playerTeam={activeBattle.playerTeam}
-          opponent={activeBattle.opponent}
-          opponentTeam={activeBattle.opponentTeam}
-          mode={activeBattle.mode}
-          pvpSessionId={activeBattle.pvpSessionId}
-          isHost={activeBattle.isPvPHost}
-          userId={user?.uid}
-          onClose={() => setActiveBattle(null)}
-          totalTrophies={playerStats.elo || 1000}
-          unlockedTrophies={playerStats.trophies}
-          inventory={playerStats.inventory || []}
-          activeBuffs={playerStats.activeBuffs || []}
-          language={language}
-          onRaidDamage={handleRaidDamage}
-          onWatchAd={async () => {
-            const success = await handleWatchAd();
-            if (success) {
-              // Determine current rewards to double them
-              let xp = 20;
-              let scrap = 50;
-              if (activeBattle.mode === 'boss') { xp = 100; scrap = 200; }
-              else if (activeBattle.mode === 'gang_war') { xp = 150; scrap = 100; }
-              else if (activeBattle.mode === 'pvp') { xp = 50; scrap = 50; }
-              
-              doubleBattleRewards(xp, scrap);
-            } else {
-              throw new Error("Ad failed");
-            }
-          }}
-          onWin={(performance) => {
-            handleBattleWin(activeBattle.mode, performance);
-            setActiveBattle(null);
-          }}
-          onLoss={() => {
-            addToast(t.battle_defeat || "Defeat...", "error");
-            setActiveBattle(null);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {activeBattle && currentWarrior && (
+          <motion.div
+            initial={{ opacity: 0, scale: 1.1 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="fixed inset-0 z-[100]"
+          >
+            <BattleArena
+              player={activeBattle.playerTeam ? activeBattle.playerTeam[0] : currentWarrior}
+              playerTeam={activeBattle.playerTeam}
+              opponent={activeBattle.opponent}
+              opponentTeam={activeBattle.opponentTeam}
+              mode={activeBattle.mode}
+              pvpSessionId={activeBattle.pvpSessionId}
+              isHost={activeBattle.isPvPHost}
+              userId={user?.uid}
+              onClose={() => setActiveBattle(null)}
+              totalTrophies={playerStats.elo || 1000}
+              unlockedTrophies={playerStats.trophies}
+              inventory={playerStats.inventory || []}
+              activeBuffs={playerStats.activeBuffs || []}
+              language={language}
+              onRaidDamage={handleRaidDamage}
+              onWatchAd={async () => {
+                const success = await handleWatchAd();
+                if (success) {
+                  // Determine current rewards to double them
+                  let xp = 20;
+                  let scrap = 50;
+                  if (activeBattle.mode === 'boss') { xp = 100; scrap = 200; }
+                  else if (activeBattle.mode === 'gang_war') { xp = 150; scrap = 100; }
+                  else if (activeBattle.mode === 'pvp') { xp = 50; scrap = 50; }
+                  
+                  doubleBattleRewards(xp, scrap);
+                } else {
+                  throw new Error("Ad failed");
+                }
+              }}
+              onWin={(performance) => {
+                handleBattleWin(activeBattle.mode, performance);
+                setActiveBattle(null);
+              }}
+              onLoss={() => {
+                addToast(t.battle_defeat || "Defeat...", "error");
+                setActiveBattle(null);
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header - Mega Punk Style */}
       <header className="relative z-40 pt-safe flex-shrink-0 w-full">
@@ -1268,9 +1130,10 @@ export default function App() {
           {view === 'scan' && (
             <motion.div
               key="scan"
-              initial={{ opacity: 0, scale: 0.95, rotate: -2 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              exit={{ opacity: 0, scale: 0.95, rotate: 2 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col min-h-0 w-full"
             >
               <div className="mb-6 relative">
@@ -1310,9 +1173,10 @@ export default function App() {
           {view === 'collection' && (
             <motion.div
               key="collection"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col"
             >
               <div className="mb-4 flex items-center justify-between bg-white border-2 border-black p-3 shadow-[4px_4px_0_#000] -rotate-1">
@@ -1403,9 +1267,10 @@ export default function App() {
           {view === 'arena' && (
             <motion.div
               key="arena"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col items-center"
             >
               {opponents.length > 0 ? (
@@ -1656,9 +1521,6 @@ export default function App() {
                           <div className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em]">Tier {Math.floor(playerStats.level / 5)}</div>
                           <div className="h-1 w-12 bg-cyan-600" />
                         </div>
-                        {matchmakingEntryId && (
-                          <div className="text-[8px] text-zinc-700 font-mono">ID: {matchmakingEntryId.slice(0, 8)}...</div>
-                        )}
                       </div>
 
                       <button
@@ -1684,9 +1546,10 @@ export default function App() {
           {view === 'guilds' && (
             <motion.div
               key="guilds"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col h-full"
             >
               <Gangs
@@ -1702,9 +1565,10 @@ export default function App() {
           {view === 'settings' && (
             <motion.div
               key="settings"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col pb-12"
             >
               <div className="mb-6 bg-white border-4 border-black p-4 shadow-[6px_6px_0_#000] rotate-1 gachi-skew">
@@ -1768,9 +1632,10 @@ export default function App() {
           {view === 'profile' && (
             <motion.div
               key="profile"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 1.02 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="flex-1 flex flex-col gap-6 pb-12"
             >
               <div className="mb-4 relative px-2">

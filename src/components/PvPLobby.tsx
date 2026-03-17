@@ -57,7 +57,7 @@ export const PvPLobby: React.FC<PvPLobbyProps> = ({ user, currentWarrior, onClos
   };
 
   const handleJoin = async (room: PVPSession) => {
-    if (!currentWarrior || !user) return;
+    if (!currentWarrior || !user || room.hostId === user.uid) return;
     try {
       await joinPvPSession(room.id, user, currentWarrior);
       onStartBattle(room.id, JSON.parse(room.hostWarrior), false);

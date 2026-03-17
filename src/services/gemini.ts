@@ -1,5 +1,5 @@
 import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
-import { compressImage } from "./imageUtils";
+import { ImageManager } from "./ImageManager";
 import { generateId } from "./utils";
 
 // Initialize the client with the default environment key
@@ -212,11 +212,11 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
     for (const part of responseParts) {
       if (part.inlineData && part.inlineData.data) {
         const fullBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-        // Attempt to compress before returning to stay under Firestore limits
+        // Use centralized ImageManager for optimization
         try {
-          return await compressImage(fullBase64, 512, 0.7);
+          return await ImageManager.optimizeForStorage(fullBase64);
         } catch (e) {
-          console.warn("Compression failed, returning original", e);
+          console.warn("Optimization failed, returning original", e);
           return fullBase64;
         }
       }

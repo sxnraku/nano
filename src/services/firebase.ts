@@ -557,6 +557,15 @@ export const subscribeToPvPSession = (sessionId: string, callback: (session: PVP
   });
 };
 
+export const getPvPSession = async (sessionId: string): Promise<PVPSession | null> => {
+  const sessionRef = doc(db, 'pvp_battles', sessionId);
+  const snap = await getDoc(sessionRef);
+  if (snap.exists()) {
+    return { id: snap.id, ...snap.data() } as PVPSession;
+  }
+  return null;
+};
+
 export const cleanupPvPSession = async (sessionId: string) => {
   try {
     const sessionRef = doc(db, 'pvp_battles', sessionId);

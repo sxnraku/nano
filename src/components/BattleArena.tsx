@@ -230,6 +230,10 @@ export function BattleArena({
   const hasTriggeredWin = useRef(false);
   const [comboTimerKey, setComboTimerKey] = useState(0);
   const [koText, setKoText] = useState('');
+  const [isSyncing, setIsSyncing] = useState(
+    mode === 'pvp' && 
+    (currentOpponent.id.includes('MOCK') || currentOpponent.name === 'Glitch-Wolf')
+  );
 
   // Status Effects State
   const [playerEffects, setPlayerEffects] = useState<{ type: 'burn' | 'stun' | 'def_break', duration: number }[]>([]);
@@ -361,6 +365,7 @@ export function BattleArena({
             const rival = JSON.parse(rivalWarriorData);
             setOpponentTeam([rival]);
             setOpponentHp(rival.stats.hp * 10);
+            setIsSyncing(false);
           }
         } catch (e) {
           console.error("Error parsing rival data:", e);
@@ -829,6 +834,28 @@ export function BattleArena({
       } else if (mode === 'blitz') {
         handleNextOpponent(); // Next opponent in blitz
         playSFX('HIT');
+      } else if (mode === 'pvp') {
+        hasTriggeredWin.current = true;
+        if (opponentAttackTimer.current) clearInterval(opponentAttackTimer.current);
+
+        const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+        setFinalStats({
+          timeTaken,
+          maxCombo,
+          hpRemaining: playerHp,
+          totalDamage: totalDamageDealt
+        });
+
+        setIsFinalizing(true);
+        playSFX('WIN');
+        vibrate([100, 50, 200]);
+        triggerShake(12);
+
+        setTimeout(() => {
+          setGameStatus('won');
+          setIsFinalizing(false);
+          setShowSummary(true);
+        }, 2000);
       }
     }
   }, [playerHp, opponentHp]);
@@ -982,8 +1009,8 @@ export function BattleArena({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-        </div>
+          </div> {/* End TopBar */}
+        </div> {/* End HeaderHUD */}
 
         {/* Battle Area */}
         <div className="flex-1 flex flex-col justify-between p-6 relative">
@@ -1002,29 +1029,41 @@ export function BattleArena({
             )}
             <motion.div
               key={currentOpponent.id}
-              animate={
-                isOpponentHit ? 
-                  { opacity: 1, scale: 1.05, x: [0, -5, 5, -5, 5, 0], filter: 'brightness(1.5)' } : 
-                  { opacity: 1, scale: 1, y: [0, -5, 0] }
-              }
-              transition={isOpponentHit ? 
-                { duration: 0.1, ease: "easeOut" } : 
-                { duration: 3, repeat: Infinity, ease: "easeInOut" }
-              }
               className="relative"
             >
-              <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[10px_10px_0_#000] rotate-2">
-                <img
-                  src={currentOpponent.imageUrl}
-                  className="w-56 h-56 object-contain bg-zinc-900/50"
-                  alt={currentOpponent.name}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop';
-                  }}
-                />
-                <div className="absolute inset-0 border-4 border-black/40 pointer-events-none" />
-              </div>
+              {isSyncing ? (
+                <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[10px_10px_0_#000] rotate-2 w-60 h-60 flex flex-col items-center justify-center gap-4">
+                  <RefreshCw className="w-12 h-12 text-yellow-400 animate-spin" />
+                  <span className="font-marker text-sm text-yellow-400 uppercase tracking-widest text-center">SYSTEM: SYNCING RIVAL...</span>
+                  <div className="absolute inset-0 bg-noise opacity-20 pointer-events-none" />
+                </div>
+              ) : (
+                <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[10px_10px_0_#000] rotate-2">
+                  <motion.div
+                    animate={
+                      isOpponentHit ? 
+                        { scale: 1.05, x: [0, -5, 5, -5, 5, 0], filter: 'brightness(1.5)' } : 
+                        { scale: 1, y: [0, -5, 0] }
+                    }
+                    transition={isOpponentHit ? 
+                      { duration: 0.1, ease: "easeOut" } : 
+                      { duration: 3, repeat: Infinity, ease: "easeInOut" }
+                    }
+                  >
+                    <img
+                      src={currentOpponent.imageUrl}
+                      className="w-56 h-56 object-contain bg-zinc-900/50"
+                      alt={currentOpponent.name}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop';
+                      }}
+                    />
+                  </motion.div>
+                  <div className="absolute inset-0 border-4 border-black/40 pointer-events-none" />
+                </div>
+              )}
+            </motion.div>
 
               {/* Enhanced Elite/Boss Frame */}
               {(currentOpponent.isElite || mode === 'boss') && (
@@ -1072,11 +1111,8 @@ export function BattleArena({
                     <PassiveIndicator passive={currentOpponent.passive} />
                   </div>
                 )}
-              </div>
-            </motion.div>
-          </div>
-
-          {/* VS / Tap Indicator */}
+              </div> {/* End StatusEffects */}
+            </div> {/* End OpponentTop */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 pointer-events-none flex flex-col items-center opacity-30">
             <Hand className="w-72 h-72 text-white/40 animate-pulse" />
             <motion.div 
