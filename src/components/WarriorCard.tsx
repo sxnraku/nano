@@ -50,17 +50,25 @@ export function WarriorCard({ warrior }: WarriorCardProps) {
 
           {/* Image Container */}
           <div className="relative h-[55%] border-b-4 border-black bg-black overflow-hidden z-10">
-            {warrior.imageUrl ? (
+            <div className="w-full h-full relative">
               <img
                 src={warrior.imageUrl}
                 alt={warrior.name}
-                className="w-full h-full object-contain mix-blend-normal"
+                className="w-full h-full object-contain mix-blend-normal relative z-10"
+                onLoad={(e) => (e.currentTarget.style.opacity = '1')}
+                style={{ opacity: 0, transition: 'opacity 0.5s ease-in-out' }}
               />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white font-marker animate-pulse text-2xl">
-                LOADING...
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 overflow-hidden">
+                <div className="absolute inset-0 bg-scanlines opacity-20" />
+                <div className="w-32 h-32 border-2 border-zinc-800 rotate-12 flex items-center justify-center">
+                  <Activity className="w-12 h-12 text-zinc-800 animate-pulse" />
+                </div>
+                <div className="mt-4 text-[10px] text-zinc-700 font-mono animate-pulse uppercase tracking-[0.3em]">
+                  Initializing_Neural_Profile...
+                </div>
+                <div className="absolute top-0 left-0 w-full h-1 bg-white/5 animate-scan" />
               </div>
-            )}
+            </div>
 
             {/* Element Badge */}
             <div className={`absolute top-0 right-0 ${elementColor} text-white font-black px-3 py-1 border-l-2 border-b-2 border-black text-sm uppercase tracking-widest`}>

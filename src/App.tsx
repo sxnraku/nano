@@ -1151,7 +1151,7 @@ export default function App() {
             >
               <div className="mb-6 relative">
                 <div className="absolute -left-4 top-0 w-1 h-full bg-yellow-400" />
-                <h2 className="text-4xl font-marker text-white mb-1 drop-shadow-[3px_3px_0_#000]">
+                <h2 className="fluid-text-lg font-marker text-white mb-1 drop-shadow-[3px_3px_0_#000]">
                   GENERATIVE <br /><span className="text-cyan-400 text-stroke-sm">CAPTURE</span>
                 </h2>
                 <p className="text-sm text-zinc-400 font-bold bg-black/50 inline-block px-2">

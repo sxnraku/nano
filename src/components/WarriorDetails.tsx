@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Shield, Sword, Zap, Heart, ArrowUp, Cpu, Star, RefreshCw, Palette, Share2 } from 'lucide-react';
+import { X, Shield, Sword, Zap, Heart, ArrowUp, Cpu, Star, RefreshCw, Palette, Share2, Activity } from 'lucide-react';
 import { GachiIcon } from './GachiIcon';
 import { GachiSticker } from './GachiSticker';
 import { WeaponCard } from './WeaponCard';
@@ -180,11 +180,18 @@ export function WarriorDetails({ warrior, isOpen, onClose, scrap, nanites, onUpg
                   <RefreshCw className="w-10 h-10 text-cyan-400 animate-spin" />
                 </div>
               ) : (
-                <img
-                  src={warrior.imageUrl}
-                  className="w-32 h-32 border-4 border-white shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-800 object-cover rotate-3"
-                  alt={warrior.name}
-                />
+                  <div className="w-full h-full relative">
+                    <img
+                      src={warrior.imageUrl}
+                      className="w-full h-full border-4 border-white shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-800 object-cover rotate-3 relative z-10"
+                      alt={warrior.name}
+                      onLoad={(e) => (e.currentTarget.style.opacity = '1')}
+                      style={{ opacity: 0, transition: 'opacity 0.5s ease-in-out' }}
+                    />
+                    <div className="absolute inset-0 border-4 border-white shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-800 flex items-center justify-center rotate-3">
+                      <Activity className="w-8 h-8 text-zinc-700 animate-pulse" />
+                    </div>
+                  </div>
               )}
               <div className="absolute -top-3 -right-3 bg-black text-white text-xs font-black px-2 py-1 border border-white -rotate-6 shadow-[2px_2px_0_#000]">
                 LVL 1

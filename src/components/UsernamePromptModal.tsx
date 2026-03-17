@@ -119,15 +119,17 @@ export function UsernamePromptModal({
                                             <UserIcon className="w-3 h-3" />
                                             {mode === 'GUEST' ? 'Temporary Alias' : 'Username'}
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            placeholder="ALIAS_X"
-                                            required
-                                            className="w-full bg-black border-4 border-zinc-800 text-white font-mono font-bold p-3 focus:outline-none focus:border-yellow-400 transition-colors uppercase text-sm"
-                                            maxLength={15}
-                                        />
+                                            <input
+                                                type="text"
+                                                value={username}
+                                                onChange={(e) => setUsername(e.target.value)}
+                                                placeholder="ALIAS_X"
+                                                required
+                                                autoComplete="off"
+                                                inputMode="text"
+                                                className="w-full bg-black border-4 border-zinc-800 text-white font-mono font-bold p-3 focus:outline-none focus:border-yellow-400 transition-colors uppercase text-sm"
+                                                maxLength={15}
+                                            />
                                     </div>
                                 )}
 
@@ -144,6 +146,8 @@ export function UsernamePromptModal({
                                                 onChange={(e) => setEmail(e.target.value)}
                                                 placeholder="NET@MATRIX.COM"
                                                 required
+                                                autoComplete="email"
+                                                inputMode="email"
                                                 className="w-full bg-black border-4 border-zinc-800 text-white font-mono font-bold p-3 focus:outline-none focus:border-yellow-400 transition-colors uppercase text-sm"
                                             />
                                         </div>
@@ -158,6 +162,7 @@ export function UsernamePromptModal({
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 placeholder="••••••••"
                                                 required
+                                                autoComplete="current-password"
                                                 className="w-full bg-black border-4 border-zinc-800 text-white font-mono font-bold p-3 focus:outline-none focus:border-yellow-400 transition-colors text-sm"
                                             />
                                         </div>

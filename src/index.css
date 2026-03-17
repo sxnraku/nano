@@ -98,6 +98,17 @@
   .hide-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .fluid-text-lg {
+    font-size: clamp(1.5rem, 8vw, 2.5rem);
+    line-height: 1.1;
+  }
+
+  .fluid-text-xl {
+    font-size: clamp(2rem, 10vw, 4rem);
+    line-height: 0.9;
   }
 
   /* Custom Range Input */

@@ -93,7 +93,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ isLoading, onFadeC
           
           {/* Logo with Glitch Blur */}
           <div className="relative z-10 text-center">
-            <span className="text-6xl font-black text-white italic tracking-tighter drop-shadow-[5px_5px_0_#dc2626]">N/V</span>
+            <span className="fluid-text-xl font-black text-white italic tracking-tighter drop-shadow-[5px_5px_0_#dc2626]">N/V</span>
             <div className="text-[10px] text-zinc-400 mt-2 font-black tracking-[0.4em] uppercase opacity-50">Core_Sys</div>
           </div>
           

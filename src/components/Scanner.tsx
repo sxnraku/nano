@@ -211,7 +211,7 @@ export function Scanner({ onScan, isProcessing, onClose }: ScannerProps) {
           <div className="w-20 h-20 bg-red-600 border-4 border-black flex items-center justify-center mb-4 shadow-[4px_4px_0_#000] rotate-2">
             <span className="text-4xl">⚠️</span>
           </div>
-          <h3 className="text-xl font-marker text-white mb-2 uppercase">{currentError.title}</h3>
+          <h3 className="fluid-text-lg font-marker text-white mb-2 uppercase">{currentError.title}</h3>
           <p className="text-zinc-400 text-sm mb-8 max-w-xs leading-relaxed">{currentError.desc}</p>
 
           <div className="flex flex-col gap-3 w-full max-w-xs">
