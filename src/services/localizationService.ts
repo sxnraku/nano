@@ -107,6 +107,12 @@ export interface Translation {
     gang_role_coleader: string;
     gang_role_member: string;
     gang_leave_confirm: string;
+    gang_ops_center: string;
+    gang_raid_threat: string;
+    gang_contract_status: string;
+    gang_recruitment_open: string;
+    gang_copy_code: string;
+    gang_dominion_level: string;
 
     // Quests
     quest_scanner_title: string;
@@ -455,6 +461,12 @@ export const translations: Record<Language, Translation> = {
         gang_role_coleader: 'CO-LEADER',
         gang_role_member: 'MEMBER',
         gang_leave_confirm: 'Are you sure you want to leave this gang?',
+        gang_ops_center: 'OPS CENTER',
+        gang_raid_threat: 'PRIORITY TARGET DETECTED',
+        gang_contract_status: 'CONTRACT STATUS',
+        gang_recruitment_open: 'RECRUITMENT ACTIVE',
+        gang_copy_code: 'COPY CODE',
+        gang_dominion_level: 'DOMINION LVL',
         quest_scanner_title: 'Obsessive Scanner',
         quest_scanner_desc: 'Scan 3 objects today.',
         quest_brawler_title: 'Alley Brawler',
@@ -777,6 +789,12 @@ export const translations: Record<Language, Translation> = {
         gang_role_coleader: 'CO-LÍDER',
         gang_role_member: 'MEMBRO',
         gang_leave_confirm: 'Tens a certeza que queres sair desta gangue?',
+        gang_ops_center: 'CENTRO DE OPERAÇÕES',
+        gang_raid_threat: 'ALVO DE PRIORIDADE DETETADO',
+        gang_contract_status: 'ESTADO DOS CONTRATOS',
+        gang_recruitment_open: 'RECRUTAMENTO ATIVO',
+        gang_copy_code: 'COPIAR CÓDIGO',
+        gang_dominion_level: 'NÍVEL DE DOMÍNIO',
         quest_scanner_title: 'Escaneador Obsessivo',
         quest_scanner_desc: 'Escaneie 3 objetos hoje.',
         quest_brawler_title: 'Lutador de Beco',

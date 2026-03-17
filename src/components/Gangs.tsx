@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Shield, Trophy, Target, Gift, Skull } from 'lucide-react';
+import { Users, Plus, Shield, Trophy, Target, Gift, Skull, Copy, Terminal, Radio, Brain, Activity } from 'lucide-react';
 import type { Guild, UserProfile } from '../services/firebase';
 import { createGuild, joinGuild, getGuilds, getGuildMembers, leaveGuild, promoteMember, kickMember } from '../services/firebase';
 import { motion } from 'motion/react';
@@ -170,10 +170,14 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
     return (
         <div className="flex-1 overflow-y-auto pb-24 p-4 space-y-6">
             <div className="text-center mb-6">
-                <h2 className="text-3xl font-black text-white italic tracking-wider uppercase drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">
-                    Underworld <span className="text-purple-500">Gangs</span>
+                <h2 className="text-3xl font-black text-white italic tracking-wider uppercase drop-shadow-[0_0_15px_rgba(168,85,247,0.3)] font-glitch">
+                    <span className="text-zinc-600">//</span> UNDERWORLD <span className="text-purple-500">GANGS</span>
                 </h2>
-                <p className="text-zinc-400 mt-2">Join other warriors. Battle for territories and gain power.</p>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                    <div className="h-[1px] w-8 bg-zinc-800" />
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-black">{t.gangs_subtitle}</p>
+                    <div className="h-[1px] w-8 bg-zinc-800" />
+                </div>
             </div>
 
             {/* User's Current Guild or Create New */}
@@ -183,83 +187,121 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
                     const myGuild = guilds.find(g => g.id === userProfile.guildId);
                     return (
                         <div className="flex flex-col">
-                            <div className="bg-purple-600 p-4 border-b-4 border-black flex items-center justify-between -mx-4 -mt-4 mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-black border-2 border-white flex items-center justify-center -rotate-3 shadow-[4px_4px_0_#000]">
+                            <div className="bg-purple-600 p-4 border-b-4 border-black flex items-center justify-between -mx-4 -mt-4 mb-6 relative overflow-hiddenGroup">
+                                <div className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
+                                <div className="flex items-center gap-3 relative z-10">
+                                    <div className="w-12 h-12 bg-black border-2 border-white flex items-center justify-center -rotate-3 shadow-[4px_4px_0_#000] group-hover:rotate-0 transition-transform">
                                         <Shield className="w-8 h-8 text-white" />
                                     </div>
                                     <div>
-                                        <div className="text-[10px] text-white bg-black px-1 font-bold uppercase tracking-widest inline-block -rotate-1">Base Ops</div>
-                                        <h3 className="text-3xl font-marker text-white uppercase italic leading-none">{myGuild ? myGuild.name : 'Gang Hub'}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-[9px] text-white bg-black px-1.5 font-black uppercase tracking-widest inline-block -rotate-1 border border-white/20">
+                                                {t.gang_ops_center}
+                                            </div>
+                                            <Activity className="w-3 h-3 text-white/50 animate-pulse" />
+                                        </div>
+                                        <h3 className="text-3xl font-marker text-white uppercase italic leading-none drop-shadow-[2px_2px_0_#000]">
+                                            {myGuild ? myGuild.name : 'Gang Hub'}
+                                        </h3>
                                     </div>
                                 </div>
                                 <button
                                     onClick={handleLeaveGuild}
-                                    className="bg-black border-2 border-white p-2 shadow-[4px_4px_0_#000] hover:bg-red-600 transition-colors group active:shadow-none active:translate-x-1 active:translate-y-1"
+                                    className="bg-black border-2 border-white p-2 shadow-[4px_4px_0_#000] hover:bg-red-600 transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-none group active:scale-95"
                                     title={t.gang_leave}
                                 >
                                     <Plus className="w-6 h-6 rotate-45 transform" />
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center skew-x-[-4deg]">
-                                    <Users className="w-5 h-5 text-cyan-400 mx-auto mb-1" />
-                                    <div className="text-white font-glitch font-black text-2xl">{myGuild ? myGuild.members : '1'}</div>
-                                    <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Members</div>
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
+                                     <div className="absolute top-0 left-0 w-full h-[1px] bg-cyan-500/30 animate-scan-fast" />
+                                    <Users className="w-5 h-5 text-cyan-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
+                                    <div className="text-white font-glitch font-black text-2xl tracking-tighter">{myGuild ? myGuild.members : '1'}</div>
+                                    <div className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">{t.gangs_members}</div>
                                 </div>
-                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center skew-x-[4deg]">
-                                    <Trophy className="w-5 h-5 text-amber-400 mx-auto mb-1" />
-                                    <div className="text-white font-glitch font-black text-2xl">{myGuild ? myGuild.totalTrophies : '0'}</div>
-                                    <div className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Dominion</div>
+                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-full h-[1px] bg-amber-500/30 animate-scan-fast" />
+                                    <Trophy className="w-5 h-5 text-amber-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
+                                    <div className="text-white font-glitch font-black text-2xl tracking-tighter">{myGuild ? myGuild.totalTrophies : '0'}</div>
+                                    <div className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">{t.gang_dominion_level}</div>
                                 </div>
                             </div>
 
-                            <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800 flex justify-between items-center mb-4">
+                            <div className="bg-zinc-950 p-3 border-2 border-zinc-800 flex justify-between items-center mb-6 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
                                 <div>
-                                    <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Recruitment Code</div>
-                                    <p className="text-purple-400 text-xs font-mono select-all bg-purple-900/30 px-2 py-1 rounded border border-purple-500/30 truncate max-w-[150px]">{userProfile.guildId}</p>
+                                    <div className="text-[9px] text-zinc-500 uppercase font-black mb-1 flex items-center gap-1">
+                                        <Terminal className="w-3 h-3" /> {t.gangs_recruitment_code}
+                                    </div>
+                                    <p className="text-purple-400 text-xs font-mono select-all bg-purple-900/20 px-2 py-1.5 rounded border border-purple-500/30 truncate max-w-[180px] shadow-[0_0_10px_rgba(168,85,247,0.1)]">
+                                        {userProfile.guildId}
+                                    </p>
                                 </div>
-                                <div className="text-[10px] text-zinc-500 text-right pr-2">
-                                    Share this ID<br />with friends!
-                                </div>
+                                <button 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(userProfile.guildId || '');
+                                        onShowToast(t.success, 'success');
+                                    }}
+                                    className="bg-zinc-900 border border-zinc-700 p-2.5 text-zinc-400 hover:text-white hover:border-white transition-all active:scale-95 shadow-[4px_4px_0_#000] active:shadow-none active:translate-x-0.5 active:translate-y-0.5"
+                                >
+                                    <Copy className="w-5 h-5" />
+                                </button>
                             </div>
 
                             {/* Gang Raid Section */}
-                            <div className="bg-gradient-to-br from-indigo-900/40 to-black border-2 border-indigo-500/50 rounded-xl p-4 mb-4 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-                                <div className="flex justify-between items-center mb-3">
-                                    <div className="flex items-center gap-2">
-                                        <Skull className="w-5 h-5 text-indigo-400" />
-                                        <span className="text-sm font-black text-white uppercase italic tracking-tighter">Gang Raid Boss</span>
+                            <div className="bg-gradient-to-br from-indigo-900/50 to-black border-4 border-black shadow-[8px_8px_0_#000] p-5 mb-6 relative overflow-hidden group/raid">
+                                <div className="absolute inset-0 bg-scanline opacity-10 pointer-events-none" />
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 blur-3xl rounded-full" />
+                                
+                                <div className="flex justify-between items-start mb-4 relative z-10">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-500/20 border border-indigo-500/40 rounded flex items-center justify-center">
+                                            <Skull className="w-6 h-6 text-indigo-400 animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-500/20 inline-block mb-1">
+                                                {t.gang_raid_threat}
+                                            </div>
+                                            <h4 className="text-2xl font-marker text-white uppercase italic tracking-tighter leading-none">
+                                                GACHI TITAN <span className="text-[10px] lowercase font-sans opacity-50 not-italic">v.{myGuild?.raidBoss?.level || 1}.0</span>
+                                            </h4>
+                                        </div>
                                     </div>
-                                    <div className="bg-indigo-600 text-[10px] text-white font-black px-2 py-0.5 rounded uppercase">Level {myGuild?.raidBoss?.level || 1}</div>
+                                    <div className="bg-indigo-600 text-[10px] text-white font-black px-2.5 py-1 rounded-sm uppercase skew-x-[-10deg] shadow-[2px_2px_0_#000]">
+                                        LVL {myGuild?.raidBoss?.level || 1}
+                                    </div>
                                 </div>
 
-                                <div className="relative h-6 bg-zinc-950 border-2 border-indigo-500/30 rounded-full overflow-hidden mb-3">
+                                <div className="relative h-8 bg-zinc-950 border-2 border-zinc-800 p-1 mb-4 overflow-hidden shadow-[inset_0_0_10px_rgba(0,0,0,0.8)]">
                                     <motion.div 
-                                        className="h-full bg-gradient-to-r from-red-600 via-indigo-500 to-indigo-400"
+                                        className="h-full bg-gradient-to-r from-red-600 via-indigo-600 to-cyan-400 relative"
                                         initial={{ width: '100%' }}
                                         animate={{ width: `${((myGuild?.raidBoss?.hp || 1000) / (myGuild?.raidBoss?.maxHp || 1000)) * 100}%` }}
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white drop-shadow-[1px_1px_0_#000]">
-                                        BOSS HP: {myGuild?.raidBoss?.hp || 0} / {myGuild?.raidBoss?.maxHp || 1000}
+                                        transition={{ duration: 1, ease: "easeOut" }}
+                                    >
+                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
+                                    </motion.div>
+                                    <div className="absolute inset-0 flex items-center justify-between px-3 text-[10px] font-black text-white drop-shadow-[1px_1px_0_#000] uppercase tracking-tighter italic">
+                                        <span>SYSTEM_STABILITY: {(myGuild?.raidBoss?.hp || 0).toLocaleString()} UNITS</span>
+                                        <span className="opacity-50">/ {(myGuild?.raidBoss?.maxHp || 1000).toLocaleString()}</span>
                                     </div>
                                 </div>
 
                                 <button
                                     onClick={() => onStartRaid?.(myGuild?.raidBoss?.level || 1)}
                                     disabled={!myGuild?.raidBoss || myGuild.raidBoss.hp <= 0}
-                                    className="gachi-button w-full flex items-center justify-center gap-3 py-3"
+                                    className="gachi-button-purple w-full py-4 text-xl flex items-center justify-center gap-4 group/btn"
                                 >
-                                    <Skull className="w-6 h-6" />
-                                    <span className="text-lg">{myGuild?.raidBoss && myGuild.raidBoss.hp > 0 ? 'ATTACK RAID BOSS' : 'BOSS ELIMINATED'}</span>
+                                    <Target className="w-6 h-6 group-hover/btn:scale-125 transition-transform" />
+                                    <span>{myGuild?.raidBoss && myGuild.raidBoss.hp > 0 ? 'NEUTRALIZE THREAT' : 'TARGET_ELIMINATED'}</span>
                                 </button>
                             </div>
 
                             {/* Guild Members List */}
-                            <div className="mt-2">
-                                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                    <Users className="w-4 h-4" /> Members
+                            <div className="mt-4">
+                                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                    <Radio className="w-3 h-3 animate-pulse text-purple-500" /> {t.gang_recruitment_open}
                                 </h4>
                                 {loadingMembers ? (
                                     <div className="text-center py-4 text-zinc-500 text-xs animate-pulse">Scanning intelligence...</div>
@@ -340,9 +382,9 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
             {userProfile && (
                 <div className="bg-zinc-950 border-4 border-black shadow-[8px_8px_0_#000] p-4 relative overflow-hidden group mt-4">
                     <div className="absolute inset-0 bg-noise opacity-20 pointer-events-none" />
-                    <h3 className="text-2xl font-marker text-white flex items-center gap-3 mb-6 -rotate-1 relative z-10">
-                        <Target className="w-6 h-6 text-red-500" />
-                        {t.gangs_contracts_title} <span className="text-xs text-zinc-500 font-sans italic lowercase">{t.gangs_contracts_subtitle}</span>
+                    <h3 className="text-2xl font-marker text-white flex items-center gap-3 mb-6 -rotate-1 relative z-10 drop-shadow-[2px_2px_0_#000]">
+                        <Terminal className="w-6 h-6 text-red-500 animate-pulse" />
+                        {t.gang_contract_status} <span className="text-[10px] text-zinc-500 font-sans italic lowercase tracking-wider bg-black px-1 border border-zinc-800">{t.gangs_contracts_subtitle}</span>
                     </h3>
 
                     <div className="space-y-4 relative z-10">
@@ -370,7 +412,7 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
                             <button
                                 onClick={() => claimQuestReward('gangWar')}
                                 disabled={(userProfile.quests?.gangWarWinsToday || 0) < 1}
-                                className={`w-12 h-12 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center transition-all active:shadow-none active:translate-x-1 active:translate-y-1 ${((userProfile.quests?.gangWarWinsToday || 0) >= 1) ? 'bg-orange-600 text-white animate-pulse' : 'bg-black text-zinc-600 opacity-50'}`}
+                                className={`w-12 h-12 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center transition-all active:shadow-none active:translate-x-1 active:translate-y-1 ${((userProfile.quests?.gangWarWinsToday || 0) >= 1) ? 'bg-orange-600 text-white animate-pulse' : 'bg-zinc-900 text-zinc-600'}`}
                             >
                                 <Gift className="w-6 h-6" />
                             </button>
@@ -381,8 +423,8 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
 
             {/* Guild List */}
             <div className="space-y-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2 px-2">
-                    <Users className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-xl font-black text-white flex items-center gap-3 px-2 uppercase italic tracking-tighter">
+                    <Radio className="w-5 h-5 text-cyan-400 animate-pulse" />
                     {t.gangs_recruiting_title}
                 </h3>
                 {loading ? (
@@ -411,7 +453,9 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
                                             <Trophy className="w-3 h-3" /> {g.totalTrophies} {t.gangs_dominion.split(' ')[0]}
                                         </span>
                                     </div>
-                                    <p className="text-[8px] text-zinc-600 mt-2 font-mono uppercase tracking-widest">{t.gang_leader_label}: <span className="text-zinc-400">{g.leaderName}</span></p>
+                                    <p className="text-[9px] text-zinc-500 mt-2 font-mono uppercase tracking-widest border-l-2 border-zinc-800 pl-2">
+                                        {t.gang_leader_label}: <span className="text-purple-400">{g.leaderName}</span>
+                                    </p>
                                 </div>
 
                                 {!userProfile?.guildId && (

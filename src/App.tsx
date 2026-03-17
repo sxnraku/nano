@@ -1049,6 +1049,7 @@ export default function App() {
             isOpen={isGangWarSelectionOpen}
             onClose={() => setIsGangWarSelectionOpen(false)}
             onStart={handleStartGangWar}
+            language={language}
           />
         )}
         {isProgressionOpen && (

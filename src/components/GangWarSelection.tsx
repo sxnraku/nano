@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Users, Sword, Shield, Zap, Heart, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Users, Sword, Shield, Zap, Heart, AlertTriangle, CheckCircle2, Terminal, Activity } from 'lucide-react';
 import type { WarriorData } from '../services/gemini';
 import { useAudio } from '../services/audioService';
+import { translations, type Language } from '../services/localizationService';
 
 interface GangWarSelectionProps {
   collection: WarriorData[];
   isOpen: boolean;
   onClose: () => void;
   onStart: (team: WarriorData[], isHardcore: boolean) => void;
+  language?: Language;
 }
 
-export function GangWarSelection({ collection, isOpen, onClose, onStart }: GangWarSelectionProps) {
+export function GangWarSelection({ collection, isOpen, onClose, onStart, language = 'en' }: GangWarSelectionProps) {
+  const t = translations[language];
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isHardcore, setIsHardcore] = useState(false);
   const { playSFX } = useAudio();
@@ -98,15 +101,20 @@ export function GangWarSelection({ collection, isOpen, onClose, onStart }: GangW
 
           {/* Warning Box (Only visible in Hardcore) */}
           {isHardcore && (
-            <div className="mb-6 p-4 bg-red-950/50 border-2 border-red-600 flex items-start gap-4 animate-pulse">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="mb-6 p-4 bg-red-950/40 border-l-8 border-red-600 flex items-start gap-4 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-red-600/5 animate-pulse pointer-events-none" />
               <AlertTriangle className="w-8 h-8 text-red-500 shrink-0" />
               <div>
-                <h4 className="text-red-500 font-black uppercase text-sm">Critical Risk Warning</h4>
-                <p className="text-xs text-red-200/70 leading-tight mt-1">
-                  If you lose, one of your 3 selected warriors will be <span className="text-red-500 font-bold">permanently removed</span> from your collection.
+                <h4 className="text-red-500 font-black uppercase text-sm italic tracking-widest">{t.gang_raid_threat || 'CRITICAL RISK WARNING'}</h4>
+                <p className="text-[10px] text-red-200/70 leading-tight mt-1 font-mono">
+                  FAILURE DETECTED. IF DEFEATED, ONE RANDOMLY SELECTED OPERATIVE WILL BE <span className="text-red-500 font-black underline">PERMANENTLY DELETED</span> FROM THE MAINFRAME.
                 </p>
               </div>
-            </div>
+            </motion.div>
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -116,29 +124,37 @@ export function GangWarSelection({ collection, isOpen, onClose, onStart }: GangW
                 <div
                   key={warrior.id}
                   onClick={() => toggleWarrior(warrior.id)}
-                  className={`relative cursor-pointer border-2 transition-all group ${isSelected ? 'border-orange-500 bg-orange-500/10' : 'border-zinc-800 bg-black hover:border-zinc-600'
+                  className={`relative cursor-pointer border-4 transition-all group overflow-hidden ${isSelected ? 'border-orange-500 bg-orange-500/10' : 'border-black bg-zinc-900/50 hover:border-zinc-700'
                     }`}
                 >
-                  <img src={warrior.imageUrl} alt={warrior.name} className="w-full aspect-square object-cover grayscale group-hover:grayscale-0 transition-all" />
-                  <div className="p-2">
-                    <h5 className="text-[10px] font-black text-white uppercase truncate">{warrior.name}</h5>
-                    <div className="flex justify-between mt-1">
-                      <div className="flex items-center gap-0.5 text-[8px] text-red-500 font-bold">
-                        <Sword className="w-2 h-2" /> {warrior.stats.atk}
-                      </div>
-                      <div className="flex items-center gap-0.5 text-[8px] text-blue-500 font-bold">
-                        <Shield className="w-2 h-2" /> {warrior.stats.def}
+                  <div className="absolute inset-0 bg-noise opacity-10 pointer-events-none" />
+                  <img src={warrior.imageUrl} alt={warrior.name} className={`w-full aspect-square object-cover transition-all duration-500 ${isSelected ? 'grayscale-0 scale-110' : 'grayscale group-hover:grayscale-0'}`} />
+                  
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
+                  
+                  <div className="absolute bottom-0 left-0 right-0 p-2 z-10">
+                    <h5 className="text-[9px] font-black text-white uppercase truncate flex items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-orange-500 animate-pulse' : 'bg-zinc-700'}`} />
+                      {warrior.name}
+                    </h5>
+                    <div className="flex justify-between mt-1 items-center">
+                      <div className="flex items-center gap-1 text-[8px] text-zinc-400 font-bold bg-black/50 px-1 rounded">
+                        <Activity className="w-2 h-2" /> {warrior.stats.atk + warrior.stats.def}
                       </div>
                     </div>
                   </div>
 
                   {isSelected && (
-                    <div className="absolute top-2 right-2 bg-orange-500 text-black p-0.5 rounded-full shadow-lg">
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute top-2 right-2 bg-orange-600 text-white p-1 rounded-full shadow-[0_0_15px_rgba(234,88,12,0.5)] z-20"
+                    >
                       <CheckCircle2 className="w-4 h-4" />
-                    </div>
+                    </motion.div>
                   )}
 
-                  <div className="absolute top-2 left-2 bg-black/80 px-1 border border-white/20 text-[8px] font-bold text-white">
+                  <div className="absolute top-2 left-2 bg-black/80 px-1.5 py-0.5 border border-white/20 text-[7px] font-black text-white italic z-20">
                     {warrior.rarity.toUpperCase()}
                   </div>
                 </div>
