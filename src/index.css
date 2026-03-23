@@ -151,6 +151,44 @@
   .rotate-y-180 {
     transform: rotateY(180deg);
   }
+
+  /* Frenzy Mode Elements */
+  .frenzy-bg {
+    background: radial-gradient(circle, rgba(255,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%);
+    animation: frenzy-pulse 1s infinite alternate;
+  }
+
+  .glitch-filter {
+    filter: url(#glitch);
+    animation: glitch-anim 0.2s infinite;
+  }
+
+  @keyframes frenzy-pulse {
+    from { opacity: 0.5; }
+    to { opacity: 1; }
+  }
+
+  @keyframes glitch-anim {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+  }
+
+  /* Performance Utilities */
+  .force-gpu {
+    transform: translate3d(0, 0, 0);
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+  }
+
+  .optimize-speed {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: pixelated;
+    shape-rendering: optimizespeed;
+  }
 }
 
 html,

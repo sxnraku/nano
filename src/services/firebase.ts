@@ -31,8 +31,11 @@ import {
   addDoc,
   where,
   onSnapshot,
-  deleteDoc
+  deleteDoc,
+  serverTimestamp
 } from 'firebase/firestore';
+
+export { Timestamp, increment, serverTimestamp };
 import type { WarriorData } from './gemini';
 import { compressImage } from './imageUtils';
 
@@ -78,12 +81,24 @@ export interface Guild {
   members: number;
   totalTrophies: number;
   createdAt: Timestamp;
+  level: number;
+  xp: number;
+  xpToNextLevel: number;
   raidBoss?: {
     hp: number;
     maxHp: number;
     level: number;
     lastDefeat?: Timestamp;
   };
+}
+
+export interface GuildMessage {
+  id?: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: Timestamp;
+  type: 'chat' | 'system';
 }
 
 export interface Challenge {
@@ -104,11 +119,24 @@ export interface PVPSession {
   guestId?: string;
   guestName?: string;
   guestWarrior?: string; // JSON string
-  status: 'waiting' | 'starting' | 'active' | 'finished';
+  status: 'waiting' | 'starting' | 'active' | 'finished' | 'syncing';
   hostHp: number;
   guestHp: number;
   hostMaxHp: number;
   guestMaxHp: number;
+  hostAttacking?: boolean;
+  guestAttacking?: boolean;
+  hostSpecial?: boolean;
+  guestSpecial?: boolean;
+  hostReady?: boolean;
+  guestReady?: boolean;
+  hostShields: number;
+  guestShields: number;
+  isCharging?: 'host' | 'guest' | null;
+  chargeType?: string;
+  lastChargeTime?: Timestamp | null;
+  hostLastAttack?: Timestamp | null;
+  guestLastAttack?: Timestamp | null;
   winnerId?: string;
   lastUpdate: Timestamp;
 }
@@ -259,6 +287,17 @@ export const updateUserStats = async (uid: string, stats: Partial<UserProfile>) 
   }
 };
 
+export const subscribeToUserProfile = (uid: string, callback: (stats: Partial<UserProfile>) => void) => {
+  const userRef = doc(db, 'users', uid);
+  return onSnapshot(userRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as UserProfile);
+    }
+  }, (error) => {
+    console.error("User profile subscription error:", error);
+  });
+};
+
 export const syncCloudSave = async (uid: string, saveData: string) => {
   try {
     const userRef = doc(db, 'users', uid);
@@ -343,7 +382,10 @@ export const createGuild = async (name: string, user: User): Promise<string> => 
       leaderName: user.displayName || 'Anonymous',
       members: 1,
       totalTrophies: 0,
-      createdAt: Timestamp.now()
+      createdAt: Timestamp.now(),
+      level: 1,
+      xp: 0,
+      xpToNextLevel: 1000
     };
 
     // Create guild doc
@@ -501,6 +543,11 @@ export const createPvPSession = async (user: User, warrior: WarriorData): Promis
     guestHp: 0,
     hostMaxHp: warrior.stats.hp,
     guestMaxHp: 0,
+    hostReady: false,
+    guestReady: false,
+    hostShields: 2,
+    guestShields: 2,
+    isCharging: null,
     lastUpdate: Timestamp.now()
   };
 
@@ -512,11 +559,13 @@ export const findPvPSessions = async (): Promise<PVPSession[]> => {
   const q = query(
     collection(db, 'pvp_battles'), 
     where('status', '==', 'waiting'), 
-    orderBy('lastUpdate', 'desc'), 
-    limit(10)
+    limit(50)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PVPSession));
+  // Sort in-memory to avoid needing a composite index (status + lastUpdate)
+  return snap.docs
+    .map(doc => ({ id: doc.id, ...doc.data() } as PVPSession))
+    .sort((a, b) => b.lastUpdate.toMillis() - a.lastUpdate.toMillis());
 };
 
 export const joinPvPSession = async (sessionId: string, user: User, warrior: WarriorData) => {
@@ -537,7 +586,8 @@ export const joinPvPSession = async (sessionId: string, user: User, warrior: War
     guestWarrior: JSON.stringify(compressedWarrior),
     guestHp: warrior.stats.hp,
     guestMaxHp: warrior.stats.hp,
-    status: 'starting',
+    guestReady: false,
+    status: 'syncing',
     lastUpdate: Timestamp.now()
   });
 };
@@ -620,23 +670,38 @@ export const listenForMatch = (entryId: string, callback: (sessionId: string) =>
 };
 
 export const findMatch = async (tier: number, excludeUid: string): Promise<MatchmakingEntry | null> => {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   const q = query(
     collection(db, 'matchmaking'),
     where('tier', '==', tier),
-    limit(20) // Get a pool of potential matches
+    limit(100) // Get a larger pool to filter in-memory
   );
   
   const snap = await getDocs(q);
   if (snap.empty) return null;
   
-  // Convert to array and filter/sort in memory
+  // Convert to array and filter/sort in memory to avoid needing a composite index (tier + timestamp)
   const entries = snap.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as MatchmakingEntry))
-    .filter(entry => entry.uid !== excludeUid)
+    .filter(entry => 
+      entry.uid !== excludeUid && 
+      !entry.matchFound && 
+      entry.timestamp.toMillis() >= fiveMinutesAgo.getTime()
+    )
     .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis()); // Oldest first
   
   if (entries.length === 0) return null;
   return entries[0];
+};
+
+export const findDirectMatch = async (targetUid: string): Promise<MatchmakingEntry | null> => {
+  const q = query(
+    collection(db, 'matchmaking'),
+    where('uid', '==', targetUid)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as MatchmakingEntry;
 };
 
 export const createMatchFromEntry = async (entry: MatchmakingEntry, guest: User, guestWarrior: WarriorData): Promise<string> => {
@@ -755,4 +820,109 @@ export const addFriend = async (uid: string, friendUid: string) => {
     console.error("Error adding friend:", error);
     return false;
   }
+};
+
+// Gang Progression & Social Functions
+export const contributeToGuild = async (guildId: string, uid: string, scrapAmount: number) => {
+  try {
+    const guildRef = doc(db, 'guilds', guildId);
+    const userRef = doc(db, 'users', uid);
+    
+    // 1 Scrap = 2 XP for the Gang
+    const xpGained = scrapAmount * 2;
+    
+    const guildSnap = await getDoc(guildRef);
+    if (!guildSnap.exists()) return;
+    
+    const guildData = guildSnap.data() as Guild;
+    let newXp = (guildData.xp || 0) + xpGained;
+    let newLevel = guildData.level || 1;
+    let newXpToNext = guildData.xpToNextLevel || 1000;
+    
+    // Level up logic
+    while (newXp >= newXpToNext) {
+      newXp -= newXpToNext;
+      newLevel++;
+      newXpToNext = Math.floor(newXpToNext * 1.5);
+    }
+    
+    await updateDoc(guildRef, {
+      xp: newXp,
+      level: newLevel,
+      xpToNextLevel: newXpToNext
+    });
+    
+    await updateDoc(userRef, {
+      scrap: increment(-scrapAmount)
+    });
+
+    // Add a system message for contribution
+    await sendGuildMessage(guildId, {
+      senderId: 'system',
+      senderName: 'SYSTEM',
+      content: `Someone contributed ${scrapAmount} scrap! Gang gained ${xpGained} XP.`,
+      timestamp: Timestamp.now(),
+      type: 'system'
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error contributing to guild:", error);
+    return false;
+  }
+};
+
+export const awardGuildXp = async (guildId: string, xpAmount: number) => {
+  try {
+    const guildRef = doc(db, 'guilds', guildId);
+    const guildSnap = await getDoc(guildRef);
+    if (!guildSnap.exists()) return;
+    
+    const guildData = guildSnap.data() as Guild;
+    let newXp = (guildData.xp || 0) + xpAmount;
+    let newLevel = guildData.level || 1;
+    let newXpToNext = guildData.xpToNextLevel || 1000;
+    
+    while (newXp >= newXpToNext) {
+      newXp -= newXpToNext;
+      newLevel++;
+      newXpToNext = Math.floor(newXpToNext * 1.5);
+    }
+    
+    await updateDoc(guildRef, {
+      xp: newXp,
+      level: newLevel,
+      xpToNextLevel: newXpToNext
+    });
+  } catch (error) {
+    console.error("Error awarding guild XP:", error);
+  }
+};
+
+export const sendGuildMessage = async (guildId: string, message: Omit<GuildMessage, 'id'>) => {
+  try {
+    const messagesRef = collection(db, 'guilds', guildId, 'messages');
+    await addDoc(messagesRef, {
+      ...message,
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error sending guild message:", error);
+  }
+};
+
+export const subscribeToGuildMessages = (guildId: string, callback: (messages: GuildMessage[]) => void) => {
+  const q = query(
+    collection(db, 'guilds', guildId, 'messages'),
+    orderBy('timestamp', 'desc'),
+    limit(50)
+  );
+  
+  return onSnapshot(q, (snapshot) => {
+    const messages = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as GuildMessage));
+    callback(messages.reverse());
+  });
 };

@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "test:multi": "start http://localhost:3000?mockUser=Alpha && start http://localhost:3000?mockUser=Beta"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.0.0",

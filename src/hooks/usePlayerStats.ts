@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { INITIAL_STATS, type PlayerStats } from '../components/ProgressionSystem';
-import { auth, updateUserStats, checkAndUnlockTrophies } from '../services/firebase';
+import { auth, updateUserStats, checkAndUnlockTrophies, subscribeToUserProfile, awardGuildXp } from '../services/firebase';
 import { WarriorData } from '../services/gemini';
 import { translations, type Language } from '../services/localizationService';
 
@@ -44,6 +44,48 @@ export const usePlayerStats = (collection: WarriorData[], addToast: (msg: string
   useEffect(() => {
     localStorage.setItem('nano-verse-stats', JSON.stringify(playerStats));
   }, [playerStats]);
+
+  // Real-time listener from Firestore
+  useEffect(() => {
+    let unsubscribe: () => void;
+    
+    const setupListener = async () => {
+      if (auth.currentUser) {
+        unsubscribe = subscribeToUserProfile(auth.currentUser.uid, (remoteStats) => {
+          setPlayerStats(prev => {
+            // Only update if there's a meaningful change to avoid infinite loops
+            // Compare key fields like scrap, level, elo
+            const hasChanges = 
+              remoteStats.scrap !== undefined && remoteStats.scrap !== prev.scrap ||
+              remoteStats.level !== undefined && remoteStats.level !== prev.level ||
+              remoteStats.elo !== undefined && remoteStats.elo !== prev.elo ||
+              remoteStats.totalWins !== undefined && remoteStats.totalWins !== prev.totalWins ||
+              (remoteStats.trophies && remoteStats.trophies.length !== (prev.trophies?.length || 0));
+
+            if (!hasChanges) return prev;
+
+            console.log("[usePlayerStats] Remote update detected, syncing...", remoteStats);
+            return {
+              ...prev,
+              scrap: remoteStats.scrap ?? prev.scrap,
+              level: remoteStats.level ?? prev.level,
+              elo: remoteStats.elo ?? prev.elo,
+              totalWins: remoteStats.totalWins ?? prev.totalWins,
+              highestCombo: remoteStats.highestCombo ?? prev.highestCombo,
+              highestWave: remoteStats.highestWave ?? prev.highestWave,
+              highestBlitzScore: remoteStats.highestBlitzScore ?? prev.highestBlitzScore,
+              trophies: remoteStats.trophies ?? prev.trophies
+            };
+          });
+        });
+      }
+    };
+    
+    setupListener();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [auth.currentUser]);
 
   // Sync stats to Firebase and check trophies
   useEffect(() => {
@@ -93,7 +135,12 @@ export const usePlayerStats = (collection: WarriorData[], addToast: (msg: string
 
       // Update totals
       if (type === 'scan') newStats.totalScans += amount;
-      if (type === 'battle_win') newStats.totalWins += amount;
+      if (type === 'battle_win') {
+        newStats.totalWins += amount;
+        if (newStats.guildId) {
+          awardGuildXp(newStats.guildId, 100); // 100 XP for a PvP win
+        }
+      }
 
       // Check Missions
       newStats.missions = newStats.missions.map(mission => {
@@ -106,6 +153,11 @@ export const usePlayerStats = (collection: WarriorData[], addToast: (msg: string
             // Mission Complete!
             addToast(t.toast_mission_complete?.replace('{title}', mission.title).replace('{xp}', mission.rewardXP.toString()) || `MISSION COMPLETE: ${mission.title}! +${mission.rewardXP} XP`, 'success');
             newStats.xp += mission.rewardXP;
+            
+            if (newStats.guildId) {
+              awardGuildXp(newStats.guildId, mission.rewardXP); // Gang gets same XP as player from missions
+            }
+            
             return { ...mission, current: newCurrent, completed: true };
           }
           return { ...mission, current: newCurrent };

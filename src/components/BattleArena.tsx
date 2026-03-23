@@ -8,7 +8,7 @@ import { translations, type Language } from '../services/localizationService';
 
 import { MOCK_OPPONENTS } from '../data/mocks';
 import { Haptics } from '@capacitor/haptics';
-import { subscribeToPvPSession, updatePvPStats, type PVPSession } from '../services/firebase';
+import { subscribeToPvPSession, updatePvPStats, type PVPSession, increment, serverTimestamp } from '../services/firebase';
 import { generateId } from '../services/utils';
 
 // Haptic Feedback Utility
@@ -21,14 +21,18 @@ const vibrate = async (pattern: number | number[]) => {
   } catch (e) { }
 };
 
+import { User } from 'firebase/auth';
+
 interface BattleArenaProps {
   player: WarriorData;
   playerTeam?: WarriorData[];
+  user: User | null;
   opponent: WarriorData;
   opponentTeam?: WarriorData[];
   mode: 'classic' | 'survival' | 'blitz' | 'boss' | 'gang_war' | 'pvp';
   pvpSessionId?: string;
   isHost?: boolean;
+  rivalName?: string;
   onClose: () => void;
   onWin?: (data?: string | number | { wave?: number, score?: number, combo?: number, damageDealt?: number }) => void;
   onLoss?: () => void;
@@ -166,7 +170,9 @@ export function BattleArena({
   userId,
   unlockedTrophies,
   totalTrophies,
-  onWatchAd
+  onWatchAd,
+  rivalName,
+  user
 }: BattleArenaProps) {
   const t = translations[language];
   const { playSFX } = useAudio();
@@ -224,16 +230,16 @@ export function BattleArena({
   const [playerEnergy, setPlayerEnergy] = useState(0);
   const [combo, setCombo] = useState(0);
   const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active');
-  const [countdown, setCountdown] = useState<number | 'GO' | null>(3);
+  const [countdown, setCountdown] = useState<number | 'GO' | null>(mode === 'pvp' ? null : 3);
+  const [isReady, setIsReady] = useState(false);
+  const [isRivalReady, setIsRivalReady] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const hasTriggeredWin = useRef(false);
   const [comboTimerKey, setComboTimerKey] = useState(0);
   const [koText, setKoText] = useState('');
-  const [isSyncing, setIsSyncing] = useState(
-    mode === 'pvp' && 
-    (currentOpponent.id.includes('MOCK') || currentOpponent.name === 'Glitch-Wolf')
-  );
+  const [isRivalAttacking, setIsRivalAttacking] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(mode === 'pvp' && pvpSessionId ? true : false);
 
   // Status Effects State
   const [playerEffects, setPlayerEffects] = useState<{ type: 'burn' | 'stun' | 'def_break', duration: number }[]>([]);
@@ -260,8 +266,31 @@ export function BattleArena({
   const [isPlayerHit, setIsPlayerHit] = useState(false);
   const [isOpponentHit, setIsOpponentHit] = useState(false);
   const [isSpecialActive, setIsSpecialActive] = useState(false);
+  const [isFrenzyActive, setIsFrenzyActive] = useState(false);
+  const frenzyTimer = useRef<any>(null);
   const [isHitStopping, setIsHitStopping] = useState(false);
   const [isFlashActive, setIsFlashActive] = useState(false);
+
+  // PvP Optimization State
+  const [lastSyncedHp, setLastSyncedHp] = useState<number | null>(null);
+  const [visualOpponentHp, setVisualOpponentHp] = useState(opponentHp);
+  const needsSync = useRef(false);
+  const [isRivalSpecial, setIsRivalSpecial] = useState(false);
+  const [rivalDisconnected, setRivalDisconnected] = useState(false);
+  
+  // Advanced PvP Mechanics
+  const [myShields, setMyShields] = useState(2);
+  const [rivalShields, setRivalShields] = useState(2);
+  const [isChargingAttack, setIsChargingAttack] = useState(false);
+  const [isOpponentCharging, setIsOpponentCharging] = useState(false);
+  const [chargeProgress, setChargeProgress] = useState(0);
+  const [showShieldPrompt, setShowShieldPrompt] = useState(false);
+  const [shieldActive, setShieldActive] = useState(false);
+  
+  const pvpDamageBuffer = useRef(0);
+  const lastProcessedRivalAttackTime = useRef<number>(0);
+  const chargeStartTime = useRef<number>(0);
+  const lastAttackSyncTime = useRef<number>(0);
 
   // Refs for game loop logic
   const lastTapTime = useRef<number>(0);
@@ -337,7 +366,12 @@ export function BattleArena({
     const finalX = x || (target === 'opponent' ? 50 + (Math.random() * 40 - 20) : 50 + (Math.random() * 40 - 20));
     const finalY = y || (target === 'opponent' ? 40 + (Math.random() * 10 - 5) : 60 + (Math.random() * 10 - 5));
 
-    setDamageNumbers(prev => [...prev, { id, value, target, isCrit, x: finalX, y: finalY, text, element }]);
+    setDamageNumbers(prev => {
+      // PERFORMANCE: Limit number of active damage numbers on mobile
+      const limited = prev.length > 5 ? prev.slice(1) : prev;
+      return [...limited, { id, value, target, isCrit, x: finalX, y: finalY, text, element }];
+    });
+    
     setTimeout(() => {
       setDamageNumbers(prev => prev.filter(dn => dn.id !== id));
     }, 800);
@@ -348,16 +382,21 @@ export function BattleArena({
     if (!isPvP || !pvpSessionId) return;
 
     const unsubscribe = subscribeToPvPSession(pvpSessionId, (session) => {
-      // Sync HP
+      // 1. Sync HP - Each player is responsible for their OWN HP source of truth
+      // but they READ the opponent's HP from the server
       if (isHost) {
         setPlayerHp(session.hostHp * 10);
         setOpponentHp(session.guestHp * 10);
+        setMyShields(session.hostShields);
+        setRivalShields(session.guestShields);
       } else {
         setPlayerHp(session.guestHp * 10);
         setOpponentHp(session.hostHp * 10);
+        setMyShields(session.guestShields);
+        setRivalShields(session.hostShields);
       }
 
-      // Sync Opponent Data (Replace mock)
+      // 2. Sync Opponent Data
       if (opponentTeam[0].id.includes('MOCK') || opponentTeam[0].name === 'Glitch-Wolf') {
         try {
           const rivalWarriorData = isHost ? session.guestWarrior : session.hostWarrior;
@@ -371,8 +410,69 @@ export function BattleArena({
           console.error("Error parsing rival data:", e);
         }
       }
+
+      // 3. Animation Sync: Detect Rival Attacks
+      const rivalLastAttack = isHost ? session.guestLastAttack : session.hostLastAttack;
+      if (rivalLastAttack && rivalLastAttack.toMillis() > lastProcessedRivalAttackTime.current) {
+        lastProcessedRivalAttackTime.current = rivalLastAttack.toMillis();
+        // Trigger Flinch on Player
+        setIsPlayerHit(true);
+        triggerShake(4, 0.1);
+        vibrate(30);
+        setTimeout(() => setIsPlayerHit(false), 100);
+      }
+
+      // 4. Charging & Shields
+      const chargingPlayer = session.isCharging;
+      if (chargingPlayer) {
+        if (chargingPlayer === (isHost ? 'guest' : 'host')) {
+          // RIVAL IS CHARGING!
+          if (!isOpponentCharging) {
+            setIsOpponentCharging(true);
+            setShowShieldPrompt(myShields > 0);
+            playSFX('CRITICAL');
+          }
+        } else {
+          // I AM CHARGING! (Already handled locally, but sync here too)
+          setIsChargingAttack(true);
+        }
+      } else {
+        setIsOpponentCharging(false);
+        setIsChargingAttack(false);
+        setShowShieldPrompt(false);
+        setShieldActive(false);
+      }
+
+      // 5. Normal Visual Flags
+      const rivalAttacking = isHost ? session.guestAttacking : session.hostAttacking;
+      setIsRivalAttacking(!!rivalAttacking);
+
+      const rivalSpecial = isHost ? session.guestSpecial : session.hostSpecial;
+      if (rivalSpecial && !isRivalSpecial) {
+        setIsRivalSpecial(true);
+        setTimeout(() => setIsRivalSpecial(false), 2000);
+      }
+
+      // 6. Connectivity & Status
+      const rivalReady = isHost ? session.guestReady : session.hostReady;
+      setIsRivalReady(!!rivalReady);
+
+      if (session.status === 'syncing' && session.hostReady && session.guestReady) {
+        if (isHost) updatePvPStats(pvpSessionId, { status: 'active' });
+      }
+
+      if (gameStatus === 'active' && session.status === 'finished' && !session.winnerId) {
+        setRivalDisconnected(true);
+      }
+
+      if (session.status === 'active' && gameStatus === 'active') {
+        setIsSyncing(false); // ENSURE SYNCING SCREEN IS GONE
+        if (countdown === null) {
+          setCountdown(3);
+        }
+      }
       
-      if (session.status === 'finished' && gameStatus === 'active') {
+      if (session.status === 'finished' && gameStatus === 'active' && session.winnerId) {
         const iWon = session.winnerId === userId;
         setGameStatus(iWon ? 'won' : 'lost');
       }
@@ -380,6 +480,59 @@ export function BattleArena({
 
     return () => unsubscribe();
   }, [isPvP, pvpSessionId, isHost, gameStatus, userId]);
+
+  // Visual HP Interpolation
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setVisualOpponentHp(prev => {
+        const diff = opponentHp - prev;
+        if (Math.abs(diff) < 1) return opponentHp;
+        return prev + diff * 0.2; // Smooth 20% interpolation
+      });
+    }, 16);
+    return () => clearInterval(timer);
+  }, [opponentHp]);
+
+  // PvP Atomic Damage Flush Loop (Pokemon GO Style)
+  useEffect(() => {
+    if (!isPvP || !pvpSessionId || gameStatus !== 'active') return;
+
+    const flushInterval = setInterval(() => {
+      if (pvpDamageBuffer.current > 0 || needsSync.current) {
+        const damageToFlush = Math.floor(pvpDamageBuffer.current / 10);
+        pvpDamageBuffer.current = 0;
+        needsSync.current = false;
+
+        const rivalHPField = isHost ? 'guestHp' : 'hostHp';
+        const myLastAttackField = isHost ? 'hostLastAttack' : 'guestLastAttack';
+        
+        // Use atomic increment for "Real" PvP
+        updatePvPStats(pvpSessionId, { 
+          [rivalHPField]: increment(-damageToFlush),
+          [myLastAttackField]: serverTimestamp() as any,
+          lastUpdate: serverTimestamp() as any
+        } as any);
+      }
+    }, 600); // Increased to 600ms to batch more damage and stay within limits
+
+    return () => clearInterval(flushInterval);
+  }, [isPvP, pvpSessionId, gameStatus, isHost]);
+
+  // PvP Rival Attack Shake
+  useEffect(() => {
+    if (isRivalSpecial && gameStatus === 'active') {
+      triggerShake(20, 0.4); // Huge shake for special
+      vibrate([100, 50, 100]);
+      setIsPlayerHit(true);
+      setTimeout(() => setIsPlayerHit(false), 500);
+      spawnDamageNumber(0, 'player', true, 50, 50, 'ULTIMATE HIT!!');
+    } else if (isRivalAttacking && gameStatus === 'active') {
+      triggerShake(6, 0.15);
+      vibrate(40);
+      setIsPlayerHit(true);
+      setTimeout(() => setIsPlayerHit(false), 200);
+    }
+  }, [isRivalAttacking, isRivalSpecial, gameStatus]);
 
   // Update updatePvPStats calls to ensure winnerId is present
   const handleWinStatsUpdate = () => {
@@ -510,10 +663,10 @@ export function BattleArena({
   const handleTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (gameStatus !== 'active' || countdown !== null) return;
 
-    // Prevent default to stop zooming/scrolling on fast taps (critical for mobile!)
-    e.preventDefault();
-    e.stopPropagation();
-
+    // PERFORMANCE: Use passive true for touch events if possible, but we need preventDefault 
+    // to stop the "buggy" double-zoom behavior on mobile.
+    if (e.cancelable) e.preventDefault();
+    
     // Check Stun
     if (playerEffects.some(eff => eff.type === 'stun')) {
       spawnDamageNumber(0, 'player', false, undefined, undefined, t.battle_stunned);
@@ -525,27 +678,29 @@ export function BattleArena({
     const timeSinceLastTap = now - lastTapTime.current;
     lastTapTime.current = now;
 
-    // Combo Logic
-    if (timeSinceLastTap < 500) {
+    // Combo Logic - Don't reset during Frenzy
+    if (isFrenzyActive || timeSinceLastTap < 500) {
       setCombo(c => {
-        const next = Math.min(c + 1, 50);
+        const next = Math.min(c + 1, 99); // Increased max combo
         if (next > maxCombo) setMaxCombo(next);
         return next;
       });
     } else {
       setCombo(1);
-      if (maxCombo < 1) setMaxCombo(1);
     }
 
-    // Reset combo timer
+    // Reset combo timer (if not in frenzy)
     if (comboTimer.current) clearTimeout(comboTimer.current);
-    comboTimer.current = setTimeout(() => setCombo(0), 1000);
+    if (!isFrenzyActive) {
+      comboTimer.current = setTimeout(() => setCombo(0), 1000);
+    }
     setComboTimerKey(prev => prev + 1);
 
     // Calculate Damage
-    const baseDmg = Math.max(10, Math.round(effectivePlayerStats.atk * 0.18)); // Balanced for longer combat
+    const baseDmg = Math.max(10, Math.round(effectivePlayerStats.atk * 0.18)); 
     const comboMultiplier = 1 + (combo * 0.05);
     const elementMultiplier = getElementalMultiplier(player, currentOpponent);
+    const frenzyMultiplier = isFrenzyActive ? 3.5 : 1.0; // Buffed from 3x to 3.5x for more "wow" factor
 
     // Passive: Adrenaline (Berserker)
     let passiveMultiplier = 1;
@@ -557,9 +712,10 @@ export function BattleArena({
     // Passive: Precision (Crit Chance)
     let critChance = 0.1 + (combo * 0.005);
     if (player.passive?.effect === 'crit_boost') critChance += player.passive.value;
+    if (isFrenzyActive) critChance = Math.max(critChance, 0.4); // High crit during frenzy
 
     const isCrit = Math.random() < critChance;
-    let damage = baseDmg * comboMultiplier * elementMultiplier * passiveMultiplier;
+    let damage = baseDmg * comboMultiplier * elementMultiplier * passiveMultiplier * frenzyMultiplier;
     if (isCrit) damage *= 2;
 
     // Status Effect: Defense Break (Opponent)
@@ -571,9 +727,9 @@ export function BattleArena({
     setTotalDamageDealt(prev => prev + damage);
 
     // Apply Damage
-    if (isCrit) {
-      vibrate([50, 30, 50]);
-      triggerShake(8, 0.2);
+    if (isCrit || isFrenzyActive) {
+      vibrate(isFrenzyActive ? 20 : [50, 30, 50]);
+      triggerShake(isFrenzyActive ? 12 : 8, 0.2);
     } else {
       vibrate(30);
       triggerShake(4, 0.1);
@@ -581,87 +737,169 @@ export function BattleArena({
 
     const newOppHp = Math.max(0, opponentHp - damage);
     
-    // Hit Stop on final blow
-    if (newOppHp === 0 && !isHitStopping) {
+    // Hit Stop on final blow or high crit
+    if ((newOppHp === 0 || (isCrit && !isFrenzyActive)) && !isHitStopping) {
       setIsHitStopping(true);
-      if ('vibrate' in navigator) navigator.vibrate([200, 100, 500]);
-      triggerShake(15, 0.5);
-      setTimeout(() => setIsHitStopping(false), 500);
+      setTimeout(() => setIsHitStopping(false), 80); // Lighter hitstop for mobile
     }
 
     setOpponentHp(newOppHp);
+    needsSync.current = true; 
 
-    // PvP Real-time Sync
+    // PvP Real-time Visual Feedback
     if (isPvP && pvpSessionId) {
-      const targetHPField = isHost ? 'guestHp' : 'hostHp';
-      updatePvPStats(pvpSessionId, { [targetHPField]: Math.floor(newOppHp / 10) });
+      // 1. Buffered Damage for Atomic Increment
+      pvpDamageBuffer.current += damage;
       
-      if (newOppHp <= 0) {
-        setGameStatus('won'); // Trigger local win immediately
+      // 2. Local Visual HP (Optimistic)
+      setOpponentHp(prev => Math.max(0, prev - damage));
+      
+      // 3. Trigger Local Attack Effect (Throttled Sync)
+      const myAttackingField = isHost ? 'hostAttacking' : 'guestAttacking';
+      if (now - lastAttackSyncTime.current > 600) {
+        lastAttackSyncTime.current = now;
+        updatePvPStats(pvpSessionId, { [myAttackingField]: true });
+        setTimeout(() => updatePvPStats(pvpSessionId, { [myAttackingField]: false }), 200);
+      }
+      
+      // 4. Energy Generation (Pokemon GO style)
+      let energyGain = 1.0;
+      if (player.passive?.effect === 'energy_boost') energyGain *= (1 + player.passive.value);
+      setPlayerEnergy(prev => Math.min(MAX_ENERGY, prev + energyGain));
+
+      if (opponentHp - damage <= 0) {
+        setGameStatus('won'); 
         handleWinStatsUpdate();
       }
+    } else {
+      // Normal Bot/Wave Logic
+      setOpponentHp(prev => Math.max(0, prev - damage));
     }
 
-    // Energy Gain
-    let energyGain = 1; // Reduced to balance the higher amount of taps
-    if (player.passive?.effect === 'energy_boost') energyGain = Math.round(energyGain * (1 + player.passive.value));
-    setPlayerEnergy(prev => Math.min(MAX_ENERGY, prev + energyGain));
+    // Energy Gain (None during frenzy)
+    if (!isFrenzyActive) {
+      let energyGain = 1.2; 
+      if (player.passive?.effect === 'energy_boost') energyGain = energyGain * (1 + player.passive.value);
+      setPlayerEnergy(prev => Math.min(MAX_ENERGY, prev + energyGain));
+    }
 
     // Passive: Lifesteal
     if (player.passive?.effect === 'lifesteal') {
       const heal = Math.round(damage * player.passive.value);
-      if (heal > 0) setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 5, prev + heal));
+      if (heal > 0) setPlayerHp(prev => Math.min(effectivePlayerStats.hp * 10, prev + heal));
     }
 
-    // Apply Status Effects (Chance)
-    if (player.passive?.effect === 'burn_chance' && Math.random() < player.passive.value) {
-      setOpponentEffects(prev => [...prev, { type: 'burn', duration: 3 }]);
-      spawnDamageNumber(0, 'opponent', false, undefined, undefined, t.battle_burned);
-    }
-    if (player.passive?.effect === 'stun_chance' && Math.random() < player.passive.value) {
-      setOpponentEffects(prev => [...prev, { type: 'stun', duration: 2 }]);
-      spawnDamageNumber(0, 'opponent', false, undefined, undefined, t.battle_stunned);
+    // Apply Status Effects (Reduced calculation frequency for mobile)
+    if (now % 2 === 0) {
+      if (player.passive?.effect === 'burn_chance' && Math.random() < player.passive.value) {
+        setOpponentEffects(prev => [...prev, { type: 'burn', duration: 3 }]);
+        spawnDamageNumber(0, 'opponent', false, undefined, undefined, t.battle_burned);
+      }
+      if (player.passive?.effect === 'stun_chance' && Math.random() < player.passive.value) {
+        setOpponentEffects(prev => [...prev, { type: 'stun', duration: 2 }]);
+        spawnDamageNumber(0, 'opponent', false, undefined, undefined, t.battle_stunned);
+      }
     }
 
     // Visuals
     setIsOpponentHit(true);
-    setTimeout(() => setIsOpponentHit(false), 100);
+    setTimeout(() => setIsOpponentHit(false), 80);
 
-    // Minor Hit Flash
     setIsFlashActive(true);
-    setTimeout(() => setIsFlashActive(false), 50);
+    setTimeout(() => setIsFlashActive(false), 40);
 
-    spawnDamageNumber(damage, 'opponent', isCrit, undefined, undefined, undefined, getElement(player));
-  }, [gameStatus, playerEffects, combo, maxCombo, effectivePlayerStats, player, currentOpponent, opponentEffects, teamSynergy, isHitStopping]);
+    spawnDamageNumber(damage, 'opponent', isCrit, undefined, undefined, isFrenzyActive ? 'FRENZY!' : undefined, getElement(player));
+  }, [gameStatus, playerEffects, combo, maxCombo, effectivePlayerStats, player, currentOpponent, opponentEffects, teamSynergy, isHitStopping, isFrenzyActive, opponentHp, playerHp]);
 
-  // Special Attack
+  // Special Attack -> Now "CHARGED ATTACK" (Pokemon GO Style)
   const handleSpecial = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Don't trigger tap
-    if (gameStatus !== 'active' || countdown !== null || playerEffects.some(eff => eff.type === 'stun')) return;
+    e.stopPropagation(); 
+    if (gameStatus !== 'active' || countdown !== null || playerEffects.some(eff => eff.type === 'stun') || isFrenzyActive || isChargingAttack || isOpponentCharging) return;
+
+    if (playerEnergy < SPECIAL_COST) return;
 
     playSFX('CRITICAL');
-    if ('vibrate' in navigator) navigator.vibrate([100, 50, 200, 50, 300]); // Heavier rumble
-    triggerShake(25); // Massive shake
+    vibrate([100, 50, 100]);
+    triggerShake(20, 0.4); 
 
-    setIsSpecialActive(true);
-    setTimeout(() => setIsSpecialActive(false), 2000);
-
-    const damage = Math.round(effectivePlayerStats.atk * 5 * getElementalMultiplier(player, currentOpponent));
-    setTotalDamageDealt(prev => prev + damage);
-
-    // Delay damage slightly to match visual impact
-    setTimeout(() => {
-      setOpponentHp(prev => Math.max(0, prev - damage));
-      spawnDamageNumber(damage, 'opponent', true);
+    if (isPvP && pvpSessionId) {
+      // 1. Enter Charge State in DB
+      const myRole = isHost ? 'host' : 'guest';
+      updatePvPStats(pvpSessionId, { 
+        isCharging: myRole,
+        lastChargeTime: serverTimestamp() as any
+      });
       
-      triggerShake(20, 0.3);
+      setIsChargingAttack(true);
+      setChargeProgress(0);
+      setPlayerEnergy(0);
+      chargeStartTime.current = Date.now();
 
-      // Special always breaks defense
-      setOpponentEffects(prev => [...prev, { type: 'def_break', duration: 5 }]);
-      spawnDamageNumber(0, 'opponent', false, undefined, undefined, t.battle_broken);
-    }, 400);
+      // 2. Auto-finish after 2.5s
+      setTimeout(() => {
+        finalizeChargedAttack();
+      }, 2500);
+    } else {
+      // Normal PVE Frenzy
+      setIsFrenzyActive(true);
+      setPlayerEnergy(0);
+      spawnDamageNumber(0, 'opponent', true, 50, 50, 'GANG FRENZY!!');
+      
+      if (frenzyTimer.current) clearTimeout(frenzyTimer.current);
+      frenzyTimer.current = setTimeout(() => {
+        setIsFrenzyActive(false);
+      }, 6000);
+    }
+  };
 
-    setPlayerEnergy(0);
+  const finalizeChargedAttack = async () => {
+    if (!isPvP || !pvpSessionId) return;
+
+    // Calculate Final Damage
+    const baseDmg = Math.round(effectivePlayerStats.atk * 1.5);
+    const bonus = chargeProgress * 0.5; // Up to 50% bonus from mini-game
+    let totalDmg = Math.round(baseDmg * (1 + bonus));
+
+    // Check if rival shielded (Need to read from DB)
+    // For simplicity, we assume if isCharging is null, the charge ended.
+    // We'll reset state first
+    setIsChargingAttack(false);
+    
+    updatePvPStats(pvpSessionId, { 
+      isCharging: null,
+      [isHost ? 'guestHp' : 'hostHp']: increment(-Math.floor(totalDmg / 10)),
+      [isHost ? 'hostSpecial' : 'guestSpecial']: true,
+      lastUpdate: serverTimestamp() as any
+    });
+    
+    setTimeout(() => {
+      updatePvPStats(pvpSessionId, { [isHost ? 'hostSpecial' : 'guestSpecial']: false });
+    }, 1000);
+
+    spawnDamageNumber(totalDmg, 'opponent', true, 50, 40, 'KO! 🔥');
+    playSFX('WIN');
+  };
+
+  const handleShield = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isPvP || !pvpSessionId || myShields <= 0 || !isOpponentCharging) return;
+
+    setMyShields(prev => prev - 1);
+    setShieldActive(true);
+    setShowShieldPrompt(false);
+    playSFX('POWER_UP');
+    vibrate(100);
+
+    const myShieldField = isHost ? 'hostShields' : 'guestShields';
+    updatePvPStats(pvpSessionId, { 
+      [myShieldField]: increment(-1)
+    });
+  };
+
+  const handleChargeTap = () => {
+    if (!isChargingAttack) return;
+    setChargeProgress(prev => Math.min(1, prev + 0.1));
+    vibrate(20);
   };
 
   // Opponent AI Loop
@@ -901,15 +1139,27 @@ export function BattleArena({
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 overflow-hidden">
       {/* Dynamic Background */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] scale-150" />
+      <div className="absolute inset-0 opacity-20 pointer-events-none force-gpu">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] scale-150 optimize-speed" />
         <div className="absolute inset-0 bg-gradient-to-b from-red-900/40 via-transparent to-cyan-900/40" />
       </div>
-      {/* Main Tap Area — uses onTouchStart for instant mobile response + onClick for desktop */}
+
+      {/* FRENZY OVERLAY */}
+      <AnimatePresence>
+        {isFrenzyActive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[5] frenzy-bg pointer-events-none force-gpu"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Main Tap Area — optimized for mobile */}
       <div
-        className="absolute inset-0 z-0 cursor-crosshair active:bg-red-500/5 transition-colors select-none"
-        onTouchStart={handleTap}
-        onClick={handleTap}
+        className="absolute inset-0 z-[10] cursor-crosshair active:bg-red-500/5 transition-colors select-none"
+        onPointerDown={handleTap}
         style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'none', userSelect: 'none' }}
       />
 
@@ -1032,7 +1282,7 @@ export function BattleArena({
               className="relative"
             >
               {isSyncing ? (
-                <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[10px_10px_0_#000] rotate-2 w-60 h-60 flex flex-col items-center justify-center gap-4">
+                <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[10px_10px_0_#000] rotate-2 w-60 h-60 flex flex-col items-center justify-center gap-4 pointer-events-none">
                   <RefreshCw className="w-12 h-12 text-yellow-400 animate-spin" />
                   <span className="font-marker text-sm text-yellow-400 uppercase tracking-widest text-center">SYSTEM: SYNCING RIVAL...</span>
                   <div className="absolute inset-0 bg-noise opacity-20 pointer-events-none" />
@@ -1049,10 +1299,11 @@ export function BattleArena({
                       { duration: 0.1, ease: "easeOut" } : 
                       { duration: 3, repeat: Infinity, ease: "easeInOut" }
                     }
+                    className={`force-gpu ${isFrenzyActive ? 'glitch-filter' : ''}`}
                   >
                     <img
                       src={currentOpponent.imageUrl}
-                      className="w-56 h-56 object-contain bg-zinc-900/50"
+                      className="w-56 h-56 object-contain bg-zinc-900/50 optimize-speed"
                       alt={currentOpponent.name}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -1084,16 +1335,29 @@ export function BattleArena({
 
               {/* HP Bar - Brutalist Style */}
               <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white overflow-hidden ${mode === 'boss' ? 'w-80 h-12' : 'w-64 h-10'} rotate-2 shadow-[8px_8px_0_#000]`}>
+                {isRivalAttacking && mode === 'pvp' && (
+                  <motion.div
+                    initial={{ opacity: 0, x: '-50%', y: 0 }}
+                    animate={{ opacity: 1, x: '-50%', y: -45 }}
+                    className="absolute left-1/2 z-[100] whitespace-nowrap"
+                  >
+                    <div className="bg-red-600 border-2 border-black px-3 py-0.5 shadow-[4px_4px_0_#000] -rotate-2">
+                      <span className="text-[9px] font-black text-white italic animate-pulse">
+                        ⚠️ INCOMING ATTACK!
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
                 <div className="absolute inset-0 bg-noise opacity-30" />
                 <motion.div
                   className={`h-full ${mode === 'boss' ? 'bg-purple-600' : 'bg-red-600'} relative`}
                   initial={{ width: '100%' }}
-                   animate={{ width: `${Math.max(0, Math.min(100, (opponentHp / (currentOpponent.stats.hp * 10)) * 100))}%` }}
+                   animate={{ width: `${Math.max(0, Math.min(100, (visualOpponentHp / (currentOpponent.stats.hp * 10)) * 100))}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
                 <span className={`absolute inset-0 flex items-center justify-center font-glitch text-white italic drop-shadow-[4px_4px_0_#000] tracking-tighter uppercase ${mode === 'boss' ? 'text-xl' : 'text-base'}`}>
-                  {currentOpponent.name}
+                  {mode === 'pvp' ? (rivalName ? `DUEL VS ${rivalName}` : `ONLINE RIVAL`) : currentOpponent.name}
                 </span>
               </div>
 
@@ -1126,15 +1390,16 @@ export function BattleArena({
 
           {/* Player (Bottom) */}
           <div className="flex flex-col items-center relative z-10 pb-10">
-            {mode === 'gang_war' && (
-              <div className="flex gap-1 mb-2">
-                {playerTeam.map((w, idx) => (
-                  <div
-                    key={w.id}
-                    className={`w-3 h-3 border border-black ${idx < currentPlayerIdx ? 'bg-zinc-800' : idx === currentPlayerIdx ? 'bg-cyan-500 animate-pulse' : 'bg-cyan-200'}`}
-                  />
-                ))}
-              </div>
+            {mode === 'pvp' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 bg-red-600 border-2 border-black px-4 py-1 shadow-[4px_4px_0_#000] rotate-1 z-50 whitespace-nowrap"
+              >
+                <span className="text-[10px] font-black text-white uppercase italic animate-pulse">
+                  {rivalName ? `DUELING ${rivalName}` : 'REAL-TIME RIVAL CONNECTED'}
+                </span>
+              </motion.div>
             )}
             <motion.div
               animate={
@@ -1142,30 +1407,30 @@ export function BattleArena({
               }
               className="relative"
             >
-              {/* Special Button (Overlay on Player or nearby) */}
+              {/* Special Button (Action) */}
               <button
                 onClick={handleSpecial}
-                disabled={playerEnergy < MAX_ENERGY}
-                className={`absolute -top-24 left-1/2 -translate-x-1/2 pointer-events-auto transition-all transform ${playerEnergy >= MAX_ENERGY
+                disabled={playerEnergy < SPECIAL_COST || isChargingAttack || isOpponentCharging}
+                className={`absolute -top-24 left-1/2 -translate-x-1/2 pointer-events-auto transition-all transform ${playerEnergy >= SPECIAL_COST && !isChargingAttack && !isOpponentCharging
                   ? 'scale-125 hover:scale-150 cursor-pointer z-50'
                   : 'scale-90 opacity-40 grayscale'
                   }`}
               >
-                <div className={`w-24 h-24 rounded-none border-[6px] border-black flex items-center justify-center shadow-[6px_6px_0_#000] rotate-3 ${playerEnergy >= MAX_ENERGY ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-800'
+                <div className={`w-24 h-24 rounded-none border-[6px] border-black flex items-center justify-center shadow-[6px_6px_0_#000] rotate-3 ${playerEnergy >= SPECIAL_COST ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-800'
                   }`}>
-                  <Zap className={`w-12 h-12 ${playerEnergy >= MAX_ENERGY ? 'text-black fill-black' : 'text-zinc-600'}`} />
+                  <Zap className={`w-12 h-12 ${playerEnergy >= SPECIAL_COST ? 'text-black fill-black' : 'text-zinc-600'}`} />
                 </div>
-                {playerEnergy >= MAX_ENERGY && (
+                {playerEnergy >= SPECIAL_COST && (
                   <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-black px-4 py-1 border-2 border-black whitespace-nowrap -rotate-6 shadow-[3px_3px_0_#000] z-20">
                     ULTIMATE READY!!
                   </div>
                 )}
               </button>
 
-              <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[-10px_10px_0_#000] -rotate-2">
+              <div className="relative p-2 bg-zinc-800 border-4 border-black shadow-[-10px_10px_0_#000] -rotate-2 force-gpu">
                 <img
                   src={player.imageUrl}
-                  className="w-48 h-48 object-cover"
+                  className={`w-48 h-48 object-cover optimize-speed ${isFrenzyActive ? 'glitch-filter' : ''}`}
                   alt={player.name}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -1188,6 +1453,35 @@ export function BattleArena({
                 <span className="absolute inset-0 flex items-center justify-center text-xl font-glitch text-white italic drop-shadow-[4px_4px_0_#000] tracking-tighter">
                   HP: {playerHp}
                 </span>
+
+                {/* Shield Indicator (Player) */}
+                {isPvP && (
+                  <div className="absolute -right-20 top-0 flex flex-col gap-1 z-50">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className={`w-6 h-6 border-2 border-black rotate-45 shadow-[2px_2px_0_#000] ${i < myShields ? 'bg-blue-500' : 'bg-zinc-700'}`}>
+                        {i < myShields && <Shield className="w-full h-full text-white p-0.5" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Shield Prompt (Reaction Button) */}
+                <AnimatePresence>
+                  {showShieldPrompt && (
+                    <motion.button
+                      initial={{ scale: 0, x: 20 }}
+                      animate={{ scale: 1, x: 0 }}
+                      exit={{ scale: 0, x: 20 }}
+                      onClick={handleShield}
+                      className="absolute -left-20 top-0 pointer-events-auto p-4 bg-blue-600 border-4 border-white shadow-[4px_4px_0_#000] -rotate-12 hover:bg-blue-500 z-[100] active:scale-95"
+                    >
+                      <Shield className="w-10 h-10 text-white" />
+                      <div className="absolute -top-3 -right-3 w-8 h-8 bg-black text-white rounded-full flex items-center justify-center font-black border-2 border-white text-xs">
+                        {myShields}
+                      </div>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Status Effects & Passive (Player) */}
@@ -1266,7 +1560,60 @@ export function BattleArena({
             ))}
           </AnimatePresence>
 
-          {/* Countdown Overlay */}
+          {/* VS Screen / Handshake Overlay for PvP */}
+        {mode === 'pvp' && countdown === null && (
+          <div className="absolute inset-0 z-[110] bg-black/90 flex flex-col items-center justify-center p-6 text-center">
+             <div className="relative mb-12">
+                <div className="absolute -inset-8 bg-red-600/20 blur-3xl animate-pulse" />
+                <h2 className="font-marker text-8xl text-white italic tracking-tighter drop-shadow-[0_10px_20px_rgba(255,0,0,0.5)]">VS</h2>
+             </div>
+
+             <div className="flex w-full items-center justify-around mb-12">
+                <div className="flex flex-col items-center gap-4">
+                   <div className="w-32 h-32 border-4 border-cyan-400 rotate-3 overflow-hidden shadow-[8px_8px_0_#000]">
+                      <img src={player.imageUrl} className="w-full h-full object-cover" />
+                   </div>
+                   <div className="bg-cyan-500 text-black font-black px-4 py-1 skew-x-[-12deg] shadow-[4px_4px_0_#000]">
+                      {user?.displayName || 'YOU'}
+                   </div>
+                   {isReady ? (
+                     <div className="text-cyan-400 text-[10px] font-black animate-pulse">READY!</div>
+                   ) : (
+                     <button 
+                        onClick={() => {
+                          setIsReady(true);
+                          if (pvpSessionId) {
+                            const field = isHost ? 'hostReady' : 'guestReady';
+                            updatePvPStats(pvpSessionId, { [field]: true });
+                          }
+                        }}
+                        className="bg-zinc-800 border-2 border-cyan-400 text-cyan-400 px-6 py-2 font-black uppercase text-xs hover:bg-cyan-400 hover:text-black transition-all"
+                     >
+                        TAP TO START
+                     </button>
+                   )}
+                </div>
+
+                <div className="flex flex-col items-center gap-4">
+                   <div className="w-32 h-32 border-4 border-red-500 -rotate-3 overflow-hidden shadow-[8px_8px_0_#000]">
+                      <img src={currentOpponent.imageUrl} className="w-full h-full object-cover grayscale" />
+                   </div>
+                   <div className="bg-red-600 text-white font-black px-4 py-1 skew-x-[12deg] shadow-[4px_4px_0_#000]">
+                      {rivalName || 'RIVAL'}
+                   </div>
+                   <div className={`text-xs font-black uppercase italic ${isRivalReady ? 'text-red-500 animate-pulse' : 'text-zinc-600'}`}>
+                      {isRivalReady ? 'READY!' : 'LOADING...'}
+                   </div>
+                </div>
+             </div>
+
+             <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-[0.3em] max-w-[200px]">
+                Waiting for the perfect synchronization...
+             </p>
+          </div>
+        )}
+
+        {/* Countdown Overlay */}
           <AnimatePresence>
             {countdown !== null && (
               <motion.div
@@ -1291,6 +1638,26 @@ export function BattleArena({
 
           {/* Dramatic Win/Loss Banner */}
           <AnimatePresence>
+            {rivalDisconnected && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 z-[300] bg-black/90 flex flex-col items-center justify-center p-8 text-center"
+              >
+                <div className="w-20 h-20 bg-zinc-800 border-4 border-white flex items-center justify-center mb-6 rotate-12">
+                   <Activity className="w-12 h-12 text-zinc-400" />
+                </div>
+                <h2 className="text-4xl font-marker text-white mb-4 italic uppercase">RIVAL DISCONNECTED</h2>
+                <p className="text-zinc-500 font-bold uppercase text-xs mb-8 tracking-tighter">Your opponent has retreated from the matrix...</p>
+                <button 
+                  onClick={onClose}
+                  className="px-8 py-3 bg-white text-black font-black uppercase border-2 border-black shadow-[4px_4px_0_#000] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                >
+                  LEAVE ARENA
+                </button>
+              </motion.div>
+            )}
+
             {isFinalizing && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -1305,7 +1672,7 @@ export function BattleArena({
                   className="relative"
                 >
                    <div className="absolute inset-1 bg-white blur-xl opacity-20" />
-                   <h2 className={`text-9xl font-marker italic uppercase drop-shadow-[15px_15px_0_#000] text-stroke-lg ${playerHp > 0 ? 'text-yellow-400' : 'text-red-600'}`}>
+                   <h2 className={`text-6xl md:text-8xl font-marker italic uppercase drop-shadow-[15px_15px_0_#000] text-stroke-lg ${playerHp > 0 ? 'text-yellow-400' : 'text-red-600'}`}>
                      {playerHp > 0 ? 'VICTORY' : 'DEFEAT'}
                    </h2>
                 </motion.div>
@@ -1378,7 +1745,7 @@ export function BattleArena({
                 animate={{ scale: 1, opacity: 1 }}
                 className="bg-white border-4 border-black p-8 shadow-[8px_8px_0_#000] text-center rotate-2 max-w-sm w-full"
               >
-                <h2 className={`text-5xl font-marker mb-4 ${gameStatus === 'won'
+                <h2 className={`text-3xl font-marker mb-2 ${gameStatus === 'won'
                   ? (mode === 'boss' ? 'text-purple-600' : 'text-green-600')
                   : 'text-red-600'
                   }`}>
@@ -1395,16 +1762,16 @@ export function BattleArena({
                 )}
 
                 {mode === 'blitz' && gameStatus === 'won' && (
-                  <div className="mb-4">
-                    <p className="text-xl font-black text-black">TOTAL KILLS</p>
-                    <p className="text-6xl font-marker text-red-600">{score}</p>
+                  <div className="mb-2">
+                    <p className="text-lg font-black text-black leading-none">TOTAL KILLS</p>
+                    <p className="text-5xl font-marker text-red-600 leading-none">{score}</p>
                   </div>
                 )}
 
                 {mode === 'survival' && gameStatus === 'lost' && (
-                  <div className="mb-4">
-                    <p className="text-xl font-black text-black">WAVES SURVIVED</p>
-                    <p className="text-6xl font-marker text-red-600">{wave - 1}</p>
+                  <div className="mb-2">
+                    <p className="text-lg font-black text-black leading-none">WAVES SURVIVED</p>
+                    <p className="text-5xl font-marker text-red-600 leading-none">{wave - 1}</p>
                   </div>
                 )}
 
@@ -1489,24 +1856,89 @@ export function BattleArena({
 
         {/* Special Attack Effect */}
         <AnimatePresence>
-          {isSpecialActive && <SpecialAttackEffect />}
+          {(isSpecialActive || isFrenzyActive) && <SpecialAttackEffect isFrenzyActive={isFrenzyActive} />}
         </AnimatePresence>
+        
+        {/* PvP Charge Overlays */}
+        <AnimatePresence>
+          {isChargingAttack && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[200] flex flex-col items-center justify-center bg-yellow-400/30 backdrop-blur-md pointer-events-auto"
+              onPointerDown={handleChargeTap}
+            >
+              <div className="bg-black p-8 border-8 border-white shadow-[15px_15px_0_#000] text-center -rotate-2">
+                <h3 className="text-4xl font-marker text-yellow-400 uppercase italic mb-2 animate-bounce">POWER UP!!</h3>
+                <p className="text-xl text-white font-black uppercase mb-4 italic">TAP FAST TO BOOST DAMAGE! FIRE🔥</p>
+                
+                <div className="w-72 h-10 bg-zinc-800 border-4 border-white overflow-hidden relative">
+                  <motion.div
+                    className="h-full bg-yellow-400"
+                    animate={{ width: `${chargeProgress * 100}%` }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xs mix-blend-difference">
+                    {Math.round(chargeProgress * 100)}%
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {isOpponentCharging && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[200] flex flex-col items-center justify-center bg-red-600/40 backdrop-blur-sm pointer-events-none"
+            >
+              <div className="bg-black p-6 border-4 border-white shadow-[10px_10px_0_#000] text-center rotate-1">
+                <h3 className="text-4xl font-marker text-red-500 uppercase italic animate-pulse">WARNING!!</h3>
+                <p className="text-lg text-white font-black uppercase">OPPONENT IS CHARGING!</p>
+                {myShields > 0 && showShieldPrompt && (
+                  <motion.p 
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ repeat: Infinity }}
+                    className="text-cyan-400 font-bold mt-2"
+                  >
+                    CLICK SHIELD NOW!
+                  </motion.p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {shieldActive && (
+            <motion.div
+              initial={{ opacity: 0, scale: 2 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[201] flex items-center justify-center pointer-events-none"
+            >
+              <div className="w-full h-full border-[20px] border-blue-500/50 rounded-full animate-ping" />
+              <Shield className="w-48 h-48 text-blue-400 animate-pulse" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <GlitchFilter />
       </motion.div>
     </div>
   );
 }
 
-function SpecialAttackEffect() {
+function SpecialAttackEffect({ isFrenzyActive }: { isFrenzyActive?: boolean }) {
   return (
     <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden flex items-center justify-center">
       <motion.div
-        className="absolute inset-0 bg-yellow-400 mix-blend-hard-light"
+        className={`absolute inset-0 ${isFrenzyActive ? 'bg-red-600' : 'bg-yellow-400'} mix-blend-hard-light`}
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.8, 0] }}
         transition={{ duration: 0.2, times: [0, 0.1, 1] }}
       />
       <motion.div
-        className="absolute w-[150vmax] h-[150vmax] rounded-full border-[50px] border-yellow-400"
+        className={`absolute w-[150vmax] h-[150vmax] rounded-full border-[50px] ${isFrenzyActive ? 'border-red-600' : 'border-yellow-400'}`}
         initial={{ scale: 0, opacity: 1 }}
         animate={{ scale: 1, opacity: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
@@ -1523,15 +1955,40 @@ function SpecialAttackEffect() {
         }}
         className="relative z-10 flex flex-col items-center"
       >
-        <Zap className="w-48 h-48 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]" />
+        {isFrenzyActive ? (
+           <Flame className="w-48 h-48 text-red-600 fill-red-600 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)]" />
+        ) : (
+           <Zap className="w-48 h-48 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]" />
+        )}
         <span
           className="font-black text-6xl text-white italic drop-shadow-[4px_4px_0_#000]"
           style={{ WebkitTextStroke: '2px black' }}
         >
-          ULTIMATE!!
+          {isFrenzyActive ? 'GANG FRENZY!!' : 'ULTIMATE!!'}
         </span>
       </motion.div>
     </div>
+  );
+}
+
+// Glitch Filter for Frenzy Mode
+function GlitchFilter() {
+  return (
+    <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+      <filter id="glitch">
+        <feColorMatrix in="SourceGraphic" type="matrix" values="1   0   0   0   0
+                0   1   0   0   0
+                0   0   1   0   0
+                0   0   0   1   0" />
+        <feOffset dx="-3" dy="2" result="red" />
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0   0   0   0   0
+                0   1   0   0   0
+                0   0   0   0   0
+                0   0   0   1   0" />
+        <feOffset dx="3" dy="-2" result="green" />
+        <feBlend in="red" in2="green" mode="screen" />
+      </filter>
+    </svg>
   );
 }
 

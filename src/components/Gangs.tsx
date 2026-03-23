@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Shield, Trophy, Target, Gift, Skull, Copy, Terminal, Radio, Brain, Activity } from 'lucide-react';
+import { Users, Plus, Shield, Trophy, Target, Gift, Skull, Copy, Terminal, Radio, Brain, Activity, MessageSquare, Star, Coins } from 'lucide-react';
 import type { Guild, UserProfile } from '../services/firebase';
-import { createGuild, joinGuild, getGuilds, getGuildMembers, leaveGuild, promoteMember, kickMember } from '../services/firebase';
-import { motion } from 'motion/react';
+import { createGuild, joinGuild, getGuilds, getGuildMembers, leaveGuild, promoteMember, kickMember, contributeToGuild } from '../services/firebase';
+import { motion, AnimatePresence } from 'motion/react';
 import type { User } from 'firebase/auth';
 import { translations, type Language } from '../services/localizationService';
+import { GangChat } from './GangChat';
+import { GangPerks } from './GangPerks';
 
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -16,6 +18,8 @@ interface GangsProps {
     onStartRaid?: (bossLevel: number) => void;
 }
 
+type Tab = 'overview' | 'chat' | 'perks' | 'members';
+
 export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onStartRaid }: GangsProps) {
     const t = translations[language];
     const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -25,6 +29,9 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
     const [newGuildName, setNewGuildName] = useState('');
     const [guildMembers, setGuildMembers] = useState<UserProfile[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
+    const [activeTab, setActiveTab] = useState<Tab>('overview');
+    const [donating, setDonating] = useState(false);
+    const [donationAmount, setDonationAmount] = useState(100);
 
     useEffect(() => {
         loadGuilds();
@@ -150,6 +157,25 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
         }
     };
 
+    const handleContribute = async () => {
+        if (!user || !userProfile?.guildId || userProfile.scrap < donationAmount) return;
+        setDonating(true);
+        try {
+            const success = await contributeToGuild(userProfile.guildId, user.uid, donationAmount);
+            if (success) {
+                onShowToast(t.success, 'success');
+                loadProfile();
+                loadGuilds();
+            } else {
+                onShowToast('Error contributing.', 'error');
+            }
+        } catch (e) {
+            onShowToast('Error contributing.', 'error');
+        } finally {
+            setDonating(false);
+        }
+    };
+
     const claimQuestReward = (questType: 'scan' | 'gangWar') => {
         onUpdateStats('claim_quest_scrap', questType === 'scan' ? 50 : 200);
         onShowToast(questType === 'scan' ? t.quest_scan_claimed : t.quest_war_claimed, 'success');
@@ -187,168 +213,209 @@ export function Gangs({ user, onShowToast, onUpdateStats, language = 'en', onSta
                     const myGuild = guilds.find(g => g.id === userProfile.guildId);
                     return (
                         <div className="flex flex-col">
-                            <div className="bg-purple-600 p-4 border-b-4 border-black flex items-center justify-between -mx-4 -mt-4 mb-6 relative overflow-hiddenGroup">
+                            <div className="bg-purple-600 p-4 border-b-4 border-black flex items-center justify-between -mx-4 -mt-4 mb-4 relative overflow-hidden group">
                                 <div className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
                                 <div className="flex items-center gap-3 relative z-10">
-                                    <div className="w-12 h-12 bg-black border-2 border-white flex items-center justify-center -rotate-3 shadow-[4px_4px_0_#000] group-hover:rotate-0 transition-transform">
-                                        <Shield className="w-8 h-8 text-white" />
+                                    <div className="w-10 h-10 bg-black border-2 border-white flex items-center justify-center -rotate-3 shadow-[4px_4px_0_#000] group-hover:rotate-0 transition-transform shrink-0">
+                                        <Shield className="w-6 h-6 text-white" />
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <div className="text-[9px] text-white bg-black px-1.5 font-black uppercase tracking-widest inline-block -rotate-1 border border-white/20">
+                                            <div className="text-[8px] text-white bg-black px-1.5 font-black uppercase tracking-widest inline-block -rotate-1 border border-white/20">
                                                 {t.gang_ops_center}
                                             </div>
                                             <Activity className="w-3 h-3 text-white/50 animate-pulse" />
                                         </div>
-                                        <h3 className="text-3xl font-marker text-white uppercase italic leading-none drop-shadow-[2px_2px_0_#000]">
+                                        <h3 className="text-2xl font-marker text-white uppercase italic leading-none drop-shadow-[2px_2px_0_#000]">
                                             {myGuild ? myGuild.name : 'Gang Hub'}
                                         </h3>
                                     </div>
                                 </div>
                                 <button
                                     onClick={handleLeaveGuild}
-                                    className="bg-black border-2 border-white p-2 shadow-[4px_4px_0_#000] hover:bg-red-600 transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-none group active:scale-95"
+                                    className="bg-black border-2 border-white p-2 shadow-[2px_2px_0_#000] hover:bg-red-600 transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none group active:scale-95"
                                     title={t.gang_leave}
                                 >
-                                    <Plus className="w-6 h-6 rotate-45 transform" />
+                                    <Plus className="w-5 h-5 rotate-45 transform" />
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
-                                     <div className="absolute top-0 left-0 w-full h-[1px] bg-cyan-500/30 animate-scan-fast" />
-                                    <Users className="w-5 h-5 text-cyan-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
-                                    <div className="text-white font-glitch font-black text-2xl tracking-tighter">{myGuild ? myGuild.members : '1'}</div>
-                                    <div className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">{t.gangs_members}</div>
-                                </div>
-                                <div className="bg-black border-2 border-zinc-800 p-3 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-[1px] bg-amber-500/30 animate-scan-fast" />
-                                    <Trophy className="w-5 h-5 text-amber-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
-                                    <div className="text-white font-glitch font-black text-2xl tracking-tighter">{myGuild ? myGuild.totalTrophies : '0'}</div>
-                                    <div className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">{t.gang_dominion_level}</div>
-                                </div>
-                            </div>
-
-                            <div className="bg-zinc-950 p-3 border-2 border-zinc-800 flex justify-between items-center mb-6 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
-                                <div>
-                                    <div className="text-[9px] text-zinc-500 uppercase font-black mb-1 flex items-center gap-1">
-                                        <Terminal className="w-3 h-3" /> {t.gangs_recruitment_code}
+                            {/* XP Bar & Level */}
+                            <div className="mb-4">
+                                <div className="flex justify-between items-end mb-1 px-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">DOMINION_LEVEL</span>
+                                        <span className="text-xl font-glitch text-purple-400 leading-none">LV. {myGuild?.level || 1}</span>
                                     </div>
-                                    <p className="text-purple-400 text-xs font-mono select-all bg-purple-900/20 px-2 py-1.5 rounded border border-purple-500/30 truncate max-w-[180px] shadow-[0_0_10px_rgba(168,85,247,0.1)]">
-                                        {userProfile.guildId}
-                                    </p>
+                                    <span className="text-[9px] font-mono text-zinc-500 italic">XP: {myGuild?.xp || 0} / {myGuild?.xpToNextLevel || 1000}</span>
                                 </div>
-                                <button 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(userProfile.guildId || '');
-                                        onShowToast(t.success, 'success');
-                                    }}
-                                    className="bg-zinc-900 border border-zinc-700 p-2.5 text-zinc-400 hover:text-white hover:border-white transition-all active:scale-95 shadow-[4px_4px_0_#000] active:shadow-none active:translate-x-0.5 active:translate-y-0.5"
-                                >
-                                    <Copy className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Gang Raid Section */}
-                            <div className="bg-gradient-to-br from-indigo-900/50 to-black border-4 border-black shadow-[8px_8px_0_#000] p-5 mb-6 relative overflow-hidden group/raid">
-                                <div className="absolute inset-0 bg-scanline opacity-10 pointer-events-none" />
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 blur-3xl rounded-full" />
-                                
-                                <div className="flex justify-between items-start mb-4 relative z-10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-500/20 border border-indigo-500/40 rounded flex items-center justify-center">
-                                            <Skull className="w-6 h-6 text-indigo-400 animate-pulse" />
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] text-indigo-400 font-black uppercase tracking-widest bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-500/20 inline-block mb-1">
-                                                {t.gang_raid_threat}
-                                            </div>
-                                            <h4 className="text-2xl font-marker text-white uppercase italic tracking-tighter leading-none">
-                                                GACHI TITAN <span className="text-[10px] lowercase font-sans opacity-50 not-italic">v.{myGuild?.raidBoss?.level || 1}.0</span>
-                                            </h4>
-                                        </div>
-                                    </div>
-                                    <div className="bg-indigo-600 text-[10px] text-white font-black px-2.5 py-1 rounded-sm uppercase skew-x-[-10deg] shadow-[2px_2px_0_#000]">
-                                        LVL {myGuild?.raidBoss?.level || 1}
-                                    </div>
-                                </div>
-
-                                <div className="relative h-8 bg-zinc-950 border-2 border-zinc-800 p-1 mb-4 overflow-hidden shadow-[inset_0_0_10px_rgba(0,0,0,0.8)]">
+                                <div className="h-3 bg-zinc-900 border-2 border-black relative overflow-hidden shadow-[2px_2px_0_rgba(0,0,0,0.5)]">
                                     <motion.div 
-                                        className="h-full bg-gradient-to-r from-red-600 via-indigo-600 to-cyan-400 relative"
-                                        initial={{ width: '100%' }}
-                                        animate={{ width: `${((myGuild?.raidBoss?.hp || 1000) / (myGuild?.raidBoss?.maxHp || 1000)) * 100}%` }}
-                                        transition={{ duration: 1, ease: "easeOut" }}
-                                    >
-                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
-                                    </motion.div>
-                                    <div className="absolute inset-0 flex items-center justify-between px-3 text-[10px] font-black text-white drop-shadow-[1px_1px_0_#000] uppercase tracking-tighter italic">
-                                        <span>SYSTEM_STABILITY: {(myGuild?.raidBoss?.hp || 0).toLocaleString()} UNITS</span>
-                                        <span className="opacity-50">/ {(myGuild?.raidBoss?.maxHp || 1000).toLocaleString()}</span>
-                                    </div>
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${((myGuild?.xp || 0) / (myGuild?.xpToNextLevel || 1000)) * 100}%` }}
+                                        className="h-full bg-gradient-to-r from-purple-600 to-indigo-400"
+                                    />
+                                    <div className="absolute inset-0 bg-scanline opacity-20" />
                                 </div>
-
-                                <button
-                                    onClick={() => onStartRaid?.(myGuild?.raidBoss?.level || 1)}
-                                    disabled={!myGuild?.raidBoss || myGuild.raidBoss.hp <= 0}
-                                    className="gachi-button-purple w-full py-4 text-xl flex items-center justify-center gap-4 group/btn"
-                                >
-                                    <Target className="w-6 h-6 group-hover/btn:scale-125 transition-transform" />
-                                    <span>{myGuild?.raidBoss && myGuild.raidBoss.hp > 0 ? 'NEUTRALIZE THREAT' : 'TARGET_ELIMINATED'}</span>
-                                </button>
                             </div>
 
-                            {/* Guild Members List */}
-                            <div className="mt-4">
-                                <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                    <Radio className="w-3 h-3 animate-pulse text-purple-500" /> {t.gang_recruitment_open}
-                                </h4>
-                                {loadingMembers ? (
-                                    <div className="text-center py-4 text-zinc-500 text-xs animate-pulse">Scanning intelligence...</div>
-                                ) : (
-                                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                                        {guildMembers.map((member, idx) => (
-                                            <div key={member.uid} className="bg-black/50 border border-zinc-800 p-2 text-sm rounded flex flex-col gap-2">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-zinc-600 font-mono text-xs w-4">{idx + 1}.</span>
-                                                        <span className={`font-bold ${member.uid === user?.uid ? 'text-purple-400' : 'text-zinc-300'}`}>
-                                                            {member.displayName}
-                                                        </span>
-                                                        <span className="bg-zinc-800 text-[8px] text-zinc-400 px-1.5 py-0.5 rounded uppercase font-black tracking-tighter">
-                                                            {member.guildRole === 'leader' ? t.gang_role_leader : member.guildRole === 'coleader' ? t.gang_role_coleader : t.gang_role_member}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex gap-3 text-xs">
-                                                        <span className="text-green-500 flex items-center gap-1"><Trophy className="w-3 h-3" /> {member.totalWins}</span>
-                                                        <span className="text-zinc-500 hidden sm:flex items-center gap-1"><Target className="w-3 h-3" /> Lv. {member.collectionSize}</span>
+                            {/* Tab Navigation */}
+                            <div className="flex border-b-2 border-black mb-4 -mx-4 overflow-x-auto no-scrollbar">
+                                {(['overview', 'chat', 'perks', 'members'] as Tab[]).map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all relative shrink-0 ${
+                                            activeTab === tab ? 'text-white bg-black' : 'text-zinc-500 hover:text-zinc-300'
+                                        }`}
+                                    >
+                                        {tab === 'overview' && <div className="flex items-center gap-1"><Terminal className="w-3 h-3" /> DASH</div>}
+                                        {tab === 'chat' && <div className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> CHAT</div>}
+                                        {tab === 'perks' && <div className="flex items-center gap-1"><Star className="w-3 h-3" /> PERKS</div>}
+                                        {tab === 'members' && <div className="flex items-center gap-1"><Users className="w-3 h-3" /> SQUAD</div>}
+                                        
+                                        {activeTab === tab && (
+                                            <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <AnimatePresence mode="wait">
+                                {activeTab === 'overview' && (
+                                    <motion.div
+                                        key="overview"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="space-y-4"
+                                    >
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-black border-2 border-zinc-800 p-2 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
+                                                <div className="absolute top-0 left-0 w-full h-[1px] bg-cyan-500/30 animate-scan-fast" />
+                                                <Users className="w-4 h-4 text-cyan-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
+                                                <div className="text-white font-glitch font-black text-xl tracking-tighter">{myGuild ? myGuild.members : '1'}</div>
+                                                <div className="text-[8px] text-zinc-500 uppercase font-black tracking-widest leading-none">{t.gangs_members}</div>
+                                            </div>
+                                            <div className="bg-black border-2 border-zinc-800 p-2 shadow-[4px_4px_0_#000] text-center relative group/stat overflow-hidden">
+                                                <div className="absolute top-0 left-0 w-full h-[1px] bg-amber-500/30 animate-scan-fast" />
+                                                <Trophy className="w-4 h-4 text-amber-400 mx-auto mb-1 group-hover/stat:scale-110 transition-transform" />
+                                                <div className="text-white font-glitch font-black text-xl tracking-tighter">{myGuild ? myGuild.totalTrophies : '0'}</div>
+                                                <div className="text-[8px] text-zinc-500 uppercase font-black tracking-widest leading-none">{t.gang_dominion_level}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Donation Box */}
+                                        <div className="bg-zinc-900/50 border-2 border-zinc-800 p-3 flex flex-col gap-2 relative group-contribution overflow-hidden">
+                                            <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-contribution:opacity-100 transition-opacity pointer-events-none" />
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2">
+                                                    <Coins className="w-4 h-4 text-amber-400" />
+                                                    <span className="text-[10px] font-black text-white uppercase italic tracking-tighter">BOOST DOMINION</span>
+                                                </div>
+                                                <span className="text-[9px] text-zinc-500 font-bold uppercase">{userProfile.scrap} SCRAP AVAILABLE</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="number"
+                                                    value={donationAmount}
+                                                    onChange={(e) => setDonationAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                                                    className="w-20 bg-black border border-zinc-700 px-2 py-1 text-xs text-amber-400 focus:outline-none focus:border-amber-500 font-mono"
+                                                />
+                                                <button
+                                                    onClick={handleContribute}
+                                                    disabled={donating || userProfile.scrap < donationAmount}
+                                                    className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 disabled:grayscale text-black font-black uppercase italic text-[10px] py-1 shadow-[2px_2px_0_#000] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all"
+                                                >
+                                                    {donating ? 'TRANSMITTING...' : 'DONATE SCRAP'}
+                                                </button>
+                                            </div>
+                                            <p className="text-[8px] text-zinc-600 font-bold italic tracking-tighter">*1 SCRAP = 2 GANG XP</p>
+                                        </div>
+
+                                        {/* Gang Raid Section */}
+                                        <div className="bg-gradient-to-br from-indigo-900/50 to-black border-4 border-black shadow-[4px_4px_0_#000] p-4 relative overflow-hidden group/raid">
+                                            <div className="absolute inset-0 bg-scanline opacity-10 pointer-events-none" />
+                                            <div className="flex justify-between items-start mb-3 relative z-10">
+                                                <div className="flex items-center gap-2">
+                                                    <Skull className="w-5 h-5 text-indigo-400 animate-pulse" />
+                                                    <div>
+                                                        <div className="text-[9px] text-indigo-400 font-black uppercase tracking-[0.2em] leading-none mb-1">RAID_BOSS</div>
+                                                        <h4 className="text-xl font-marker text-white uppercase italic tracking-tighter leading-none">GACHI TITAN</h4>
                                                     </div>
                                                 </div>
-                                                
-                                                {/* Actions */}
-                                                {member.uid !== user?.uid && (userProfile?.guildRole === 'leader' || (userProfile?.guildRole === 'coleader' && member.guildRole === 'member')) && (
-                                                    <div className="flex gap-2">
-                                                        {userProfile?.guildRole === 'leader' && member.guildRole !== 'leader' && (
-                                                            <button 
-                                                                onClick={() => handlePromoteMember(member.uid, userProfile.guildId!, member.guildRole || 'member')}
-                                                                className="text-[10px] font-black text-cyan-400 hover:text-cyan-300 uppercase underline"
-                                                            >
-                                                                {t.gang_promote}
-                                                            </button>
-                                                        )}
-                                                        <button 
-                                                            onClick={() => handleKickMember(member.uid)}
-                                                            className="text-[10px] font-black text-red-500 hover:text-red-400 uppercase underline"
-                                                        >
-                                                            {t.gang_kick}
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                <div className="bg-indigo-600 text-[8px] text-white font-black px-1.5 py-0.5 rounded-sm uppercase skew-x-[-10deg]">LVL {myGuild?.raidBoss?.level || 1}</div>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <button
+                                                onClick={() => onStartRaid?.(myGuild?.raidBoss?.level || 1)}
+                                                disabled={!myGuild?.raidBoss || myGuild.raidBoss.hp <= 0}
+                                                className="gachi-button-purple w-full py-2 text-xs flex items-center justify-center gap-2"
+                                            >
+                                                <Target className="w-4 h-4" />
+                                                <span>{myGuild?.raidBoss && myGuild.raidBoss.hp > 0 ? 'BATTLE BOSS' : 'DEFEATED'}</span>
+                                            </button>
+                                        </div>
+                                    </motion.div>
                                 )}
-                            </div>
+
+                                {activeTab === 'chat' && (
+                                    <motion.div
+                                        key="chat"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                    >
+                                        <GangChat guildId={userProfile.guildId!} user={user} />
+                                    </motion.div>
+                                )}
+
+                                {activeTab === 'perks' && (
+                                    <motion.div
+                                        key="perks"
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 1.05 }}
+                                    >
+                                        <GangPerks currentLevel={myGuild?.level || 1} />
+                                    </motion.div>
+                                )}
+
+                                {activeTab === 'members' && (
+                                    <motion.div
+                                        key="members"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                    >
+                                        <div className="bg-zinc-950 p-2 border-2 border-zinc-800 flex justify-between items-center mb-4">
+                                            <p className="text-purple-400 text-[10px] font-mono select-all truncate max-w-[200px]">{userProfile.guildId}</p>
+                                            <button onClick={() => { navigator.clipboard.writeText(userProfile.guildId || ''); onShowToast(t.success, 'success'); }} className="p-1 text-zinc-500 hover:text-white"><Copy className="w-4 h-4" /></button>
+                                        </div>
+                                        {loadingMembers ? <div className="text-center py-4 text-zinc-500 animate-pulse uppercase text-[10px] font-black">SCANNING SQUAD...</div> : (
+                                            <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                {guildMembers.map((member, idx) => (
+                                                    <div key={member.uid} className="bg-black border border-zinc-800 p-2 rounded flex flex-col gap-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-zinc-600 font-mono text-[10px]">{idx + 1}.</span>
+                                                                <span className={`font-bold text-xs ${member.uid === user?.uid ? 'text-purple-400' : 'text-zinc-300'}`}>{member.displayName}</span>
+                                                                <span className="bg-zinc-800 text-[7px] text-zinc-400 px-1 py-0.5 rounded uppercase font-black">{member.guildRole}</span>
+                                                            </div>
+                                                            <span className="text-green-500 text-[10px] flex items-center gap-1"><Trophy className="w-3 h-3" /> {member.totalWins}</span>
+                                                        </div>
+                                                        {member.uid !== user?.uid && (userProfile?.guildRole === 'leader' || (userProfile?.guildRole === 'coleader' && member.guildRole === 'member')) && (
+                                                            <div className="flex gap-2 border-t border-zinc-800 pt-1 mt-1">
+                                                                {userProfile?.guildRole === 'leader' && member.guildRole !== 'leader' && <button onClick={() => handlePromoteMember(member.uid, userProfile.guildId!, member.guildRole || 'member')} className="text-[8px] font-black text-cyan-400 uppercase underline">PROMOTE</button>}
+                                                                <button onClick={() => handleKickMember(member.uid)} className="text-[8px] font-black text-red-500 uppercase underline italic">KICK</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     );
                 })() : (

@@ -79,11 +79,11 @@ export default function App() {
   const [isPvPLobbyOpen, setIsPvPLobbyOpen] = useState(false);
   const [warriorToShare, setWarriorToShare] = useState<WarriorData | null>(null);
   const [inviteUid, setInviteUid] = useState<string | null>(null);
-
   const [collection, setCollection] = useState<WarriorData[]>([]);
   const [currentWarriorId, setCurrentWarriorId] = useState<string | null>(null);
   const [isAppInitialLoading, setIsAppInitialLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [pendingChallenge, setPendingChallenge] = useState<string | null>(null);
 
   const currentWarrior = useMemo(() => {
     return collection.find(w => w.id === currentWarriorId) || collection[0] || null;
@@ -118,11 +118,31 @@ export default function App() {
     isMatchFound,
     handleStartMatchmaking,
     handleCancelMatchmaking
-  } = useMatchmaking(user, currentWarrior, playerStats, setActiveBattle, addToast, language);
+  } = useMatchmaking(user, currentWarrior, playerStats, (battle) => {
+    // Ensure PvP matches show the real opponent's name from Firebase
+    setActiveBattle(battle);
+    if (battle.mode === 'pvp') {
+      addToast(language === 'pt' ? `🔥 DUELO ENCONTRADO CONTRA ${battle.rivalName || 'GUERREIRO'}` : `🔥 MATCH FOUND AGAINST ${battle.rivalName || 'WARRIOR'}`, 'success');
+    }
+  }, addToast, language);
 
   // Initialization and Auth logic
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const directChallengeId = params.get('challenge');
+    if (directChallengeId) {
+       setPendingChallenge(directChallengeId);
+       // Clear the URL parameter so it doesn't persist on refresh
+       window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     initAuth().then(() => {
+      const p = new URLSearchParams(window.location.search);
+      const mock = p.get('mockUser');
+      if (mock && window.location.hostname === 'localhost') {
+        console.log(`[DEV] Triggering anonymous sign-in for mock user: ${mock}`);
+        signIn(mock).catch(err => console.error("Mock sign-in failed", err));
+      }
       setAuthInitialized(true);
       initializeAdMob(); // Initialize AdMob on mobile
     }).catch(err => {
@@ -906,8 +926,8 @@ export default function App() {
             className="fixed inset-0 z-[100]"
           >
             <BattleArena
-              player={activeBattle.playerTeam ? activeBattle.playerTeam[0] : currentWarrior}
-              playerTeam={activeBattle.playerTeam}
+              player={activeBattle.playerTeam ? activeBattle.playerTeam[0] : (collection.find(w => w.id === currentWarriorId) || collection[0])}
+              user={user}
               opponent={activeBattle.opponent}
               opponentTeam={activeBattle.opponentTeam}
               mode={activeBattle.mode}
@@ -1498,23 +1518,42 @@ export default function App() {
                     </button>
 
                     {/* PvP Real-time Mode */}
-                    <button
-                      onClick={() => handleEnterArena('pvp')}
-                      disabled={isSearching}
-                      className="group relative bg-zinc-950 border-4 border-red-600 p-4 transition-all text-left overflow-hidden shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:shadow-[10px_10px_0_#dc2626] hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none col-span-1 sm:col-span-2"
-                    >
-                      <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none" />
-                      <div className="absolute top-0 right-1 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-tighter border-l-2 border-b-2 border-black -skew-x-12 z-20">Live Beta</div>
-                      <div className="relative z-10 flex items-center gap-4">
-                        <div className="w-14 h-14 bg-red-600 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center group-hover:scale-125 transition-transform">
-                          <Swords className="w-10 h-10 text-black font-black" />
+                    <div className="col-span-1 sm:col-span-2 space-y-3">
+                      <button
+                        onClick={() => handleEnterArena('pvp')}
+                        disabled={isSearching}
+                        className="w-full group relative bg-zinc-950 border-4 border-red-600 p-4 transition-all text-left overflow-hidden shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:shadow-[10px_10px_0_#dc2626] hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none"
+                      >
+                        <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none" />
+                        <div className="absolute top-0 right-1 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-tighter border-l-2 border-b-2 border-black -skew-x-12 z-20">Live Beta</div>
+                        <div className="relative z-10 flex items-center gap-4">
+                          <div className="w-14 h-14 bg-red-600 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center group-hover:scale-125 transition-transform">
+                            <Swords className="w-10 h-10 text-black font-black" />
+                          </div>
+                          <div>
+                            <h3 className="font-marker text-3xl text-red-500 uppercase italic leading-none mb-1">ONLINE DUEL</h3>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Sincronismo Real 1v1</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-marker text-3xl text-red-500 uppercase italic leading-none mb-1">{t.mode_pvp_title}</h3>
-                          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">{t.mode_pvp_desc}</p>
-                        </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      <button
+                         onClick={() => {
+                           if (!user) {
+                             addToast("Login required for challenges", "error");
+                             return;
+                           }
+                           // Automate matchmaking for the sender so the friend finds someone waiting
+                           handleStartMatchmaking();
+                           const link = `${window.location.origin}${window.location.pathname}?challenge=${user.uid}`;
+                           navigator.clipboard.writeText(link);
+                           addToast(language === 'pt' ? "Link de desafio copiado e busca iniciada!" : "Challenge link copied & matchmaking started!", "success");
+                         }}
+                         className="w-full py-2 bg-zinc-900 border-2 border-zinc-700 text-yellow-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" /> {language === 'pt' ? 'DESAFIAR AMIGO (COPIAR LINK)' : 'CHALLENGE FRIEND (COPY LINK)'}
+                      </button>
+                    </div>
                   </div>
 
                   {isMatchmaking && (
@@ -1763,6 +1802,32 @@ export default function App() {
                       />
                     </div>
                   </div>
+
+                  {/* Pending Challenge Alert */}
+                  {pendingChallenge && (
+                    <div className="mb-6 bg-yellow-400 border-4 border-black p-4 shadow-[8px_8px_0_#000] rotate-1 animate-bounce">
+                      <h4 className="text-black font-black uppercase text-sm mb-2 flex items-center gap-2">
+                        <Swords className="w-5 h-5" /> {language === 'pt' ? 'DESAFIO PENDENTE!' : 'PENDING CHALLENGE!'}
+                      </h4>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            handleStartMatchmaking(undefined, pendingChallenge);
+                            setPendingChallenge(null);
+                          }}
+                          className="flex-1 py-2 bg-black text-white font-black uppercase text-xs border-2 border-black hover:bg-zinc-800"
+                        >
+                          {language === 'pt' ? 'ACEITAR DUELO' : 'ACCEPT DUEL'}
+                        </button>
+                        <button
+                          onClick={() => setPendingChallenge(null)}
+                          className="px-4 py-2 bg-white text-black font-black uppercase text-xs border-2 border-black hover:bg-zinc-200"
+                        >
+                          {language === 'pt' ? 'REJEITAR' : 'DECLINE'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Trophies Section */}
                   <div className="mt-8">

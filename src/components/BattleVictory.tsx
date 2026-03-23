@@ -90,12 +90,12 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
           transition={{ type: 'spring', damping: 10, stiffness: 120 }}
           className="text-center"
         >
-          <h1 className="text-8xl font-marker text-white italic drop-shadow-[8px_8px_0_#000] -rotate-3 uppercase"
+          <h1 className="text-5xl md:text-8xl font-marker text-white italic drop-shadow-[8px_8px_0_#000] -rotate-3 uppercase"
             style={{ WebkitTextStroke: '2px black' }}
           >
             {mode === 'gang_war' ? 'DOMINION!' : mode === 'boss' ? 'BOSS DOWN!' : 'VICTORY!'}
           </h1>
-          <div className="inline-block mt-2 bg-red-600 text-white px-6 py-1.5 border-4 border-black font-black uppercase text-[10px] tracking-[0.3em] rotate-2 shadow-[4px_4px_0_#000] gachi-skew">
+          <div className="inline-block mt-1 bg-red-600 text-white px-4 py-1 border-4 border-black font-black uppercase text-[8px] tracking-[0.2em] rotate-2 shadow-[4px_4px_0_#000] gachi-skew">
             {mode === 'boss' ? 'CHAMPION DEFEATED' : mode === 'gang_war' ? 'RIVAL GANG CRUSHED' : 'STREETS CLEANED'}
           </div>
 
@@ -131,9 +131,9 @@ export function BattleVictory({ player, opponent, mode, stats, rewards, unlocked
           </div>
 
           {/* Rank Circle */}
-          <div className={`relative w-24 h-24 border-[6px] ${rank.border} bg-black flex items-center justify-center ${rank.shadow} rotate-6 shadow-[6px_6px_0_#000] gachi-inner-shadow`}>
-            <div className={`absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-[0.2em] ${rank.color}`}>RANK</div>
-            <span className={`font-marker text-6xl italic ${rank.color} drop-shadow-[4px_4px_0_#000]`}>{rank.letter}</span>
+          <div className={`relative w-20 h-20 border-[6px] ${rank.border} bg-black flex items-center justify-center ${rank.shadow} rotate-6 shadow-[6px_6px_0_#000] gachi-inner-shadow`}>
+            <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-[0.1em] ${rank.color}`}>RANK</div>
+            <span className={`font-marker text-5xl italic ${rank.color} drop-shadow-[4px_4px_0_#000]`}>{rank.letter}</span>
           </div>
 
           <div className="relative grayscale opacity-40">
@@ -376,8 +376,8 @@ function StatBox({ icon, label, value, color, delay }: { icon: React.ReactNode; 
         {icon}
       </div>
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic">{label}</span>
-        <span className="text-2xl font-glitch text-white leading-tight uppercase">{value}</span>
+        <span className="text-[8px] font-black text-zinc-500 uppercase tracking-tight italic">{label}</span>
+        <span className="text-xl font-glitch text-white leading-tight uppercase">{value}</span>
       </div>
     </motion.div>
   );

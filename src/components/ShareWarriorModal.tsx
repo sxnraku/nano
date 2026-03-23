@@ -22,19 +22,41 @@ export function ShareWarriorModal({ warrior, onClose, language = 'en' }: ShareWa
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Generate challenge link automatically on mount if logged in
+  // Generate challenge link automatically on mount if logged in, or when user signs in
   useEffect(() => {
-    if (auth.currentUser && !challengeUrl) {
-      handleCreateChallenge();
-    }
-  }, []);
+    let unsubscribeAuth: () => void;
+    
+    const checkAndGenerate = async () => {
+      if (auth.currentUser && !challengeUrl) {
+        await handleCreateChallenge();
+      }
+    };
+
+    // If already logged in, generate immediately
+    checkAndGenerate();
+
+    // Also listen for auth changes (in case they sign in while modal is open)
+    unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (user) checkAndGenerate();
+    });
+
+    return () => {
+      if (unsubscribeAuth) unsubscribeAuth();
+    };
+  }, [auth.currentUser, challengeUrl]);
 
   const handleCreateChallenge = async () => {
     if (!auth.currentUser) return;
     setLoading(true);
     try {
       const challengeId = await createChallenge(warrior, auth.currentUser);
-      const host = window.location.origin;
+      
+      // FIX: Use production domain if origin is localhost (common in Capacitor/Dev)
+      let host = window.location.origin;
+      if (host.includes('localhost') || host.includes('127.0.0.1')) {
+        host = 'https://nanoverse-589fa.web.app';
+      }
+      
       setChallengeUrl(`${host}/?challenge=${challengeId}`);
       setInviteUrl(`${host}/?invite=${auth.currentUser.uid}`);
     } catch (error) {

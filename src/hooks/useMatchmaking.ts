@@ -3,11 +3,12 @@ import { User } from 'firebase/auth';
 import { WarriorData } from '../services/gemini';
 import { 
   findMatch, 
+  findDirectMatch,
   createMatchFromEntry, 
   enterMatchmaking, 
   cancelMatchmaking, 
   listenForMatch,
-  getPvPSession
+  getPvPSession 
 } from '../services/firebase';
 import { MOCK_OPPONENTS } from '../data/mocks';
 
@@ -27,17 +28,22 @@ export const useMatchmaking = (
   const [matchmakingEntryId, setMatchmakingEntryId] = useState<string | null>(null);
   const [isMatchFound, setIsMatchFound] = useState(false);
 
-  const handleStartMatchmaking = async () => {
+  const handleStartMatchmaking = async (tier?: number, targetUid?: string) => {
     if (!currentWarrior || !user) return;
     
     setIsMatchmaking(true);
     setIsMatchFound(false);
     
-    const tier = Math.floor(playerStats.level / 5);
-    
     try {
-      console.log("[Matchmaking] Starting search for tier:", tier);
-      const match = await findMatch(tier, user.uid);
+      let match = null;
+      if (targetUid) {
+        console.log("[Matchmaking] Attempting direct match with:", targetUid);
+        match = await findDirectMatch(targetUid);
+      } else {
+        const searchTier = tier || Math.floor(playerStats.level / 5);
+        console.log("[Matchmaking] Starting search for tier:", searchTier);
+        match = await findMatch(searchTier, user.uid);
+      }
       
       if (match) {
         console.log("[Matchmaking] Found existing match entry:", match.id);
@@ -55,6 +61,9 @@ export const useMatchmaking = (
         setIsMatchmaking(false);
         setIsMatchFound(false);
       } else {
+        // Wait a small random jitter to avoid race conditions with another player clicking at the exact same ms
+        await new Promise(r => setTimeout(r, Math.random() * 500));
+        
         console.log("[Matchmaking] No immediate match, entering queue...");
         const entryId = await enterMatchmaking(user, currentWarrior, playerStats.level);
         console.log("[Matchmaking] Queue entry ID:", entryId);
@@ -87,21 +96,18 @@ export const useMatchmaking = (
           const session = await getPvPSession(sessionId);
           
           if (session) {
-            const rivalData = JSON.parse(session.hostWarrior); // Matchmaker is Host in the entry data
+            const rivalData = JSON.parse(session.hostWarrior); 
             setActiveBattle({
               opponent: rivalData,
               mode: 'pvp',
               pvpSessionId: sessionId,
-              isPvPHost: false // The waiter (host in entry) becomes the session Guest
+              isPvPHost: false,
+              rivalName: session.hostName
             });
           } else {
-            // Fallback
-            setActiveBattle({
-              opponent: MOCK_OPPONENTS[0],
-              mode: 'pvp',
-              pvpSessionId: sessionId,
-              isPvPHost: false
-            });
+            console.warn("[Matchmaking] Session not found for ID:", sessionId);
+            // Don't show a bot, show a clear error or wait
+            addToast(language === 'pt' ? "Erro ao carregar sessão PvP" : "Error loading PvP session", "error");
           }
         } catch (e) {
           console.error("Error setting up match from listener:", e);
@@ -126,28 +132,52 @@ export const useMatchmaking = (
     };
   }, [matchmakingEntryId]);
 
-  // Initial cleanup: remove any leftover matchmaking entries for this user
+  // Initial cleanup: remove any leftover matchmaking entries for this user AND old stale entries
   useEffect(() => {
     if (user && !isMatchmaking) {
       const runCleanup = async () => {
         try {
           const { db } = await import('../services/firebase');
-          const { collection, query, where, getDocs, deleteDoc } = await import('firebase/firestore');
+          const { collection, query, where, getDocs, deleteDoc, Timestamp } = await import('firebase/firestore');
           
-          const q = query(
+          // 1. Cleanup current user's entries (personal maintenance)
+          const qUser = query(
             collection(db, 'matchmaking'),
-            where('userId', '==', user.uid)
+            where('uid', '==', user.uid)
           );
           
-          const snapshot = await getDocs(q);
-          if (!snapshot.empty) {
-            console.log(`[Matchmaking] Found ${snapshot.size} leftover entries. Cleaning up...`);
-            const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-            await Promise.all(deletePromises);
-            console.log("[Matchmaking] Cleanup complete.");
+          // 2. Cleanup ANY matchmaking entry older than 10 minutes (global maintenance)
+          const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+          const qStaleMatch = query(
+            collection(db, 'matchmaking'),
+            where('timestamp', '<', Timestamp.fromDate(tenMinutesAgo))
+          );
+          
+          // 3. Cleanup ANY pvp_battle older than 30 minutes (session maintenance)
+          const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+          const qStaleBattles = query(
+            collection(db, 'pvp_battles'),
+            where('lastUpdate', '<', Timestamp.fromDate(thirtyMinutesAgo))
+          );
+
+          const [snapUser, snapStale, snapBattles] = await Promise.all([
+            getDocs(qUser), 
+            getDocs(qStaleMatch),
+            getDocs(qStaleBattles)
+          ]);
+          
+          const docsToDelete = [...snapUser.docs, ...snapStale.docs, ...snapBattles.docs].filter((doc, index, self) => 
+            self.findIndex(d => d.id === doc.id) === index
+          );
+
+          if (docsToDelete.length > 0) {
+            console.log(`[Matchmaking] Maintenance: attempting to clean ${docsToDelete.length} stale/personal entries...`);
+            // Use allSettled to avoid failing if some deletes are denied by rules
+            await Promise.allSettled(docsToDelete.map(doc => deleteDoc(doc.ref)));
+            console.log("[Matchmaking] Maintenance cycle complete.");
           }
         } catch (e) {
-          console.warn("[Matchmaking] Failed to run initial cleanup:", e);
+          console.warn("[Matchmaking] Failed to run global cleanup:", e);
         }
       };
       runCleanup();
