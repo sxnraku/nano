@@ -14,6 +14,7 @@ import { MOCK_OPPONENTS } from '../data/mocks';
 
 interface PlayerStats {
   level: number;
+  elo?: number;
 }
 
 export const useMatchmaking = (
@@ -41,22 +42,23 @@ export const useMatchmaking = (
         match = await findDirectMatch(targetUid);
       } else {
         const searchTier = tier || Math.floor(playerStats.level / 5);
-        console.log("[Matchmaking] Starting search for tier:", searchTier);
         match = await findMatch(searchTier, user.uid);
       }
       
       if (match) {
-        console.log("[Matchmaking] Found existing match entry:", match.id);
         setIsMatchFound(true);
-        const sessionId = await createMatchFromEntry(match, user, currentWarrior);
-        console.log("[Matchmaking] Created PvP session:", sessionId);
-        
-        setActiveBattle({
-          opponent: JSON.parse(match.warriorData),
-          mode: 'pvp',
-          pvpSessionId: sessionId,
-          isPvPHost: true // The finder (guest in entry) becomes the session Host
-        });
+        try {
+          const sessionId = await createMatchFromEntry(match, user, currentWarrior, playerStats.elo || 1000);
+          
+          setActiveBattle({
+            opponent: JSON.parse(match.warriorData), // entry owner's warrior = opponent for the finder
+            mode: 'pvp',
+            pvpSessionId: sessionId,
+            isPvPHost: false // finder is the guest in the new session
+          });
+        } catch (matchErr) {
+          console.error("[Matchmaking] Error in createMatchFromEntry:", matchErr);
+        }
         
         setIsMatchmaking(false);
         setIsMatchFound(false);
@@ -65,7 +67,7 @@ export const useMatchmaking = (
         await new Promise(r => setTimeout(r, Math.random() * 500));
         
         console.log("[Matchmaking] No immediate match, entering queue...");
-        const entryId = await enterMatchmaking(user, currentWarrior, playerStats.level);
+        const entryId = await enterMatchmaking(user, currentWarrior, playerStats.level, playerStats.elo || 1000);
         console.log("[Matchmaking] Queue entry ID:", entryId);
         setMatchmakingEntryId(entryId);
       }
@@ -96,13 +98,13 @@ export const useMatchmaking = (
           const session = await getPvPSession(sessionId);
           
           if (session) {
-            const rivalData = JSON.parse(session.hostWarrior); 
+            const rivalData = JSON.parse(session.guestWarrior); // Finder is the guest
             setActiveBattle({
               opponent: rivalData,
               mode: 'pvp',
               pvpSessionId: sessionId,
-              isPvPHost: false,
-              rivalName: session.hostName
+              isPvPHost: true, // Entry owner is the host in DB
+              rivalName: session.guestName
             });
           } else {
             console.warn("[Matchmaking] Session not found for ID:", sessionId);

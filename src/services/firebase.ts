@@ -138,6 +138,8 @@ export interface PVPSession {
   hostLastAttack?: Timestamp | null;
   guestLastAttack?: Timestamp | null;
   winnerId?: string;
+  hostElo?: number;
+  guestElo?: number;
   lastUpdate: Timestamp;
 }
 
@@ -147,6 +149,7 @@ export interface MatchmakingEntry {
   displayName: string;
   warriorData: string;
   tier: number;
+  elo: number;
   timestamp: Timestamp;
   matchFound?: string; // sessionId
 }
@@ -251,6 +254,13 @@ export const logout = async () => {
     console.error("Error signing out:", error);
     throw error;
   }
+};
+
+export const updateUserElo = async (userId: string, eloDelta: number) => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    elo: increment(eloDelta)
+  });
 };
 
 // Leaderboard Functions
@@ -628,7 +638,7 @@ export const cleanupPvPSession = async (sessionId: string) => {
 };
 
 // Matchmaking Functions
-export const enterMatchmaking = async (user: User, warrior: WarriorData, level: number): Promise<string> => {
+export const enterMatchmaking = async (user: User, warrior: WarriorData, level: number, elo: number = 1000): Promise<string> => {
   const tier = Math.floor(level / 5); // Match players every 5 levels
   
   // Compress image right before matchmaking to stay under 1MB
@@ -646,6 +656,7 @@ export const enterMatchmaking = async (user: User, warrior: WarriorData, level: 
     displayName: user.displayName || 'Warrior',
     warriorData: JSON.stringify(compressedWarrior),
     tier,
+    elo,
     timestamp: Timestamp.now()
   };
 
@@ -683,11 +694,12 @@ export const findMatch = async (tier: number, excludeUid: string): Promise<Match
   // Convert to array and filter/sort in memory to avoid needing a composite index (tier + timestamp)
   const entries = snap.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as MatchmakingEntry))
-    .filter(entry => 
-      entry.uid !== excludeUid && 
-      !entry.matchFound && 
-      entry.timestamp.toMillis() >= fiveMinutesAgo.getTime()
-    )
+    .filter(entry => {
+      const isNotSelf = entry.uid !== excludeUid;
+      const isNotMatched = !entry.matchFound;
+      const isRecent = entry.timestamp.toMillis() >= fiveMinutesAgo.getTime();
+      return isNotSelf && isNotMatched && isRecent;
+    })
     .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis()); // Oldest first
   
   if (entries.length === 0) return null;
@@ -704,22 +716,52 @@ export const findDirectMatch = async (targetUid: string): Promise<MatchmakingEnt
   return { id: snap.docs[0].id, ...snap.docs[0].data() } as MatchmakingEntry;
 };
 
-export const createMatchFromEntry = async (entry: MatchmakingEntry, guest: User, guestWarrior: WarriorData): Promise<string> => {
-  // 1. Create PVP Session
-  const sessionId = await createPvPSession(guest, guestWarrior);
-  
-  // 2. Join the session as host (using the entry data)
-  const sessionRef = doc(db, 'pvp_battles', sessionId);
-  await updateDoc(sessionRef, {
-    guestId: entry.uid,
-    guestName: entry.displayName,
-    guestWarrior: entry.warriorData,
-    guestHp: JSON.parse(entry.warriorData).stats.hp,
-    guestMaxHp: JSON.parse(entry.warriorData).stats.hp,
-    status: 'starting'
-  });
+export const createMatchFromEntry = async (entry: MatchmakingEntry, finder: User, finderWarrior: WarriorData, finderElo: number = 1000): Promise<string> => {
+  // The entry owner (who was waiting in the queue) is the Firestore "host".
+  // The finder (who picked them up) is the Firestore "guest".
+  // This is critical: the entry owner's listener reads session.hostWarrior as the opponent,
+  // so hostWarrior must be the FINDER's warrior (the opponent from the entry owner's perspective).
 
-  // 3. Notify the original host
+  // Compress finder's warrior image
+  let compressedFinderWarrior = { ...finderWarrior };
+  if (finderWarrior.imageUrl && finderWarrior.imageUrl.length > 500000) {
+    try {
+      compressedFinderWarrior.imageUrl = await compressImage(finderWarrior.imageUrl, 400, 0.6);
+    } catch (e) {
+      console.warn("Failed to compress finder warrior for match", e);
+    }
+  }
+
+  // 1. Build session: entry owner = host fields, finder = guest fields
+  const entryWarriorData = JSON.parse(entry.warriorData);
+  const sessionData: Omit<PVPSession, 'id'> = {
+    // Host = entry owner (was waiting)
+    hostId: entry.uid,
+    hostName: entry.displayName,
+    hostWarrior: entry.warriorData,
+    hostHp: entryWarriorData.stats.hp,
+    hostMaxHp: entryWarriorData.stats.hp,
+    hostReady: false,
+    hostShields: 2,
+    hostElo: entry.elo || 1000,
+    // Guest = finder (joined)
+    guestId: finder.uid,
+    guestName: finder.displayName || 'Warrior',
+    guestWarrior: JSON.stringify(compressedFinderWarrior),
+    guestHp: finderWarrior.stats.hp,
+    guestMaxHp: finderWarrior.stats.hp,
+    guestReady: false,
+    guestShields: 2,
+    guestElo: finderElo, 
+    status: 'starting',
+    isCharging: null,
+    lastUpdate: Timestamp.now()
+  };
+
+  const docRef = await addDoc(collection(db, 'pvp_battles'), sessionData);
+  const sessionId = docRef.id;
+
+  // 2. Notify the entry owner with the session ID
   await updateDoc(doc(db, 'matchmaking', entry.id), {
     matchFound: sessionId
   });

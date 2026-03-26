@@ -1422,6 +1422,44 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col gap-4 w-full">
+                    {/* PvP Real-time Mode — FIRST */}
+                    <div className="col-span-1 sm:col-span-2 space-y-3">
+                      <button
+                        onClick={() => handleEnterArena('pvp')}
+                        disabled={isSearching}
+                        className="w-full group relative bg-zinc-950 border-4 border-red-600 p-4 transition-all text-left overflow-hidden shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:shadow-[10px_10px_0_#dc2626] hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none"
+                      >
+                        <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none" />
+                        <div className="absolute top-0 right-1 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-tighter border-l-2 border-b-2 border-black -skew-x-12 z-20">Live Beta</div>
+                        <div className="relative z-10 flex items-center gap-4">
+                          <div className="w-14 h-14 bg-red-600 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center group-hover:scale-125 transition-transform">
+                            <Swords className="w-10 h-10 text-black font-black" />
+                          </div>
+                          <div>
+                            <h3 className="font-marker text-3xl text-red-500 uppercase italic leading-none mb-1">ONLINE DUEL</h3>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Sincronismo Real 1v1</p>
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                         onClick={() => {
+                           if (!user) {
+                             addToast("Login required for challenges", "error");
+                             return;
+                           }
+                           // Automate matchmaking for the sender so the friend finds someone waiting
+                           handleStartMatchmaking();
+                           const link = `${window.location.origin}${window.location.pathname}?challenge=${user.uid}`;
+                           navigator.clipboard.writeText(link);
+                           addToast(language === 'pt' ? "Link de desafio copiado e busca iniciada!" : "Challenge link copied & matchmaking started!", "success");
+                         }}
+                         className="w-full py-2 bg-zinc-900 border-2 border-zinc-700 text-yellow-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" /> {language === 'pt' ? 'DESAFIAR AMIGO (COPIAR LINK)' : 'CHALLENGE FRIEND (COPY LINK)'}
+                      </button>
+                    </div>
+
                     {/* Classic Mode */}
                     <button
                       onClick={() => handleEnterArena('classic')}
@@ -1517,43 +1555,6 @@ export default function App() {
                       </div>
                     </button>
 
-                    {/* PvP Real-time Mode */}
-                    <div className="col-span-1 sm:col-span-2 space-y-3">
-                      <button
-                        onClick={() => handleEnterArena('pvp')}
-                        disabled={isSearching}
-                        className="w-full group relative bg-zinc-950 border-4 border-red-600 p-4 transition-all text-left overflow-hidden shadow-[0_0_20px_rgba(220,38,38,0.3)] hover:shadow-[10px_10px_0_#dc2626] hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none"
-                      >
-                        <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none" />
-                        <div className="absolute top-0 right-1 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 uppercase tracking-tighter border-l-2 border-b-2 border-black -skew-x-12 z-20">Live Beta</div>
-                        <div className="relative z-10 flex items-center gap-4">
-                          <div className="w-14 h-14 bg-red-600 border-2 border-black shadow-[4px_4px_0_#000] flex items-center justify-center group-hover:scale-125 transition-transform">
-                            <Swords className="w-10 h-10 text-black font-black" />
-                          </div>
-                          <div>
-                            <h3 className="font-marker text-3xl text-red-500 uppercase italic leading-none mb-1">ONLINE DUEL</h3>
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Sincronismo Real 1v1</p>
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                         onClick={() => {
-                           if (!user) {
-                             addToast("Login required for challenges", "error");
-                             return;
-                           }
-                           // Automate matchmaking for the sender so the friend finds someone waiting
-                           handleStartMatchmaking();
-                           const link = `${window.location.origin}${window.location.pathname}?challenge=${user.uid}`;
-                           navigator.clipboard.writeText(link);
-                           addToast(language === 'pt' ? "Link de desafio copiado e busca iniciada!" : "Challenge link copied & matchmaking started!", "success");
-                         }}
-                         className="w-full py-2 bg-zinc-900 border-2 border-zinc-700 text-yellow-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4" /> {language === 'pt' ? 'DESAFIAR AMIGO (COPIAR LINK)' : 'CHALLENGE FRIEND (COPY LINK)'}
-                      </button>
-                    </div>
                   </div>
 
                   {isMatchmaking && (

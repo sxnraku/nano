@@ -8,8 +8,10 @@ import { translations, type Language } from '../services/localizationService';
 
 import { MOCK_OPPONENTS } from '../data/mocks';
 import { Haptics } from '@capacitor/haptics';
-import { subscribeToPvPSession, updatePvPStats, type PVPSession, increment, serverTimestamp } from '../services/firebase';
+import { subscribeToPvPSession, updatePvPStats, type PVPSession, increment, serverTimestamp, updateUserElo } from '../services/firebase';
 import { generateId } from '../services/utils';
+import { getPvPEloExchange } from '../utils/elo';
+import { PvPResultScreen } from './PvPResultScreen';
 
 // Haptic Feedback Utility
 const vibrate = async (pattern: number | number[]) => {
@@ -219,14 +221,16 @@ export function BattleArena({
     return stats;
   };
 
-  const effectivePlayerStats = useMemo(() => 
-    getEffectiveStats(player, playerWeapon, activeBuffs),
-  [player, playerWeapon, activeBuffs]);
+  const effectivePlayerStats = useMemo(() => {
+    if (mode === 'pvp') {
+      return { hp: 100, atk: 100, def: 100, spd: 100 }; // Perfect symmetry
+    }
+    return getEffectiveStats(player, playerWeapon, activeBuffs);
+  }, [player, playerWeapon, activeBuffs, mode]);
 
   // Game State
-  // Game State
-  const [playerHp, setPlayerHp] = useState(effectivePlayerStats.hp * 10);
-  const [opponentHp, setOpponentHp] = useState(currentOpponent.stats.hp * 10); 
+  const [playerHp, setPlayerHp] = useState(mode === 'pvp' ? 1000 : effectivePlayerStats.hp * 10);
+  const [opponentHp, setOpponentHp] = useState(mode === 'pvp' ? 1000 : currentOpponent.stats.hp * 10); 
   const [playerEnergy, setPlayerEnergy] = useState(0);
   const [combo, setCombo] = useState(0);
   const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active');
@@ -240,6 +244,8 @@ export function BattleArena({
   const [koText, setKoText] = useState('');
   const [isRivalAttacking, setIsRivalAttacking] = useState(false);
   const [isSyncing, setIsSyncing] = useState(mode === 'pvp' && pvpSessionId ? true : false);
+  const [hasPvPStarted, setHasPvPStarted] = useState(false);
+  const hasPvPStartedRef = useRef(false);
 
   // Status Effects State
   const [playerEffects, setPlayerEffects] = useState<{ type: 'burn' | 'stun' | 'def_break', duration: number }[]>([]);
@@ -255,6 +261,11 @@ export function BattleArena({
     hpRemaining: number;
     totalDamage: number;
   } | null>(null);
+
+  // Elo State
+  const [eloDelta, setEloDelta] = useState<number | null>(null);
+  const [newElo, setNewElo] = useState<number | null>(null);
+  const hasUpdatedElo = useRef(false);
 
   // Mode Specific State
   const [wave, setWave] = useState(1);
@@ -273,7 +284,7 @@ export function BattleArena({
 
   // PvP Optimization State
   const [lastSyncedHp, setLastSyncedHp] = useState<number | null>(null);
-  const [visualOpponentHp, setVisualOpponentHp] = useState(opponentHp);
+  // visualOpponentHp removed in favor of native framer motion tweens
   const needsSync = useRef(false);
   const [isRivalSpecial, setIsRivalSpecial] = useState(false);
   const [rivalDisconnected, setRivalDisconnected] = useState(false);
@@ -383,15 +394,13 @@ export function BattleArena({
 
     const unsubscribe = subscribeToPvPSession(pvpSessionId, (session) => {
       // 1. Sync HP - Each player is responsible for their OWN HP source of truth
-      // but they READ the opponent's HP from the server
+      // We ONLY update our own HP from the server to avoid overwriting our local optimistic opponent HP
       if (isHost) {
-        setPlayerHp(session.hostHp * 10);
-        setOpponentHp(session.guestHp * 10);
+        setPlayerHp(Math.max(0, session.hostHp * 10));
         setMyShields(session.hostShields);
         setRivalShields(session.guestShields);
       } else {
-        setPlayerHp(session.guestHp * 10);
-        setOpponentHp(session.hostHp * 10);
+        setPlayerHp(Math.max(0, session.guestHp * 10));
         setMyShields(session.guestShields);
         setRivalShields(session.hostShields);
       }
@@ -457,7 +466,7 @@ export function BattleArena({
       const rivalReady = isHost ? session.guestReady : session.hostReady;
       setIsRivalReady(!!rivalReady);
 
-      if (session.status === 'syncing' && session.hostReady && session.guestReady) {
+      if ((session.status === 'syncing' || session.status === 'starting') && session.hostReady && session.guestReady) {
         if (isHost) updatePvPStats(pvpSessionId, { status: 'active' });
       }
 
@@ -467,31 +476,45 @@ export function BattleArena({
 
       if (session.status === 'active' && gameStatus === 'active') {
         setIsSyncing(false); // ENSURE SYNCING SCREEN IS GONE
-        if (countdown === null) {
-          setCountdown(3);
+        if (isPvP) {
+           // We use the Ref here to avoid stale closures in the subscription causing repeated countdowns
+           if (!hasPvPStartedRef.current) {
+             setCountdown(3);
+           }
+        } else {
+           if (countdown === null) {
+             setCountdown(3);
+           }
         }
       }
       
       if (session.status === 'finished' && gameStatus === 'active' && session.winnerId) {
         const iWon = session.winnerId === userId;
-        setGameStatus(iWon ? 'won' : 'lost');
+        
+        // Finalize Elo if not done yet
+        if (!hasUpdatedElo.current) {
+          hasUpdatedElo.current = true;
+          const myElo = isHost ? (session.hostElo || 1000) : (session.guestElo || 1000);
+          const rivalElo = isHost ? (session.guestElo || 1000) : (session.hostElo || 1000);
+          const { playerDelta } = getPvPEloExchange(myElo, rivalElo, iWon);
+          setEloDelta(playerDelta);
+          setNewElo(myElo + playerDelta);
+          updateUserElo(userId || '', playerDelta).catch(console.error);
+        }
+
+        if (!iWon) {
+          // Force local player KO 
+          setPlayerHp(0);
+        } else {
+          setOpponentHp(0);
+        }
       }
     });
 
     return () => unsubscribe();
   }, [isPvP, pvpSessionId, isHost, gameStatus, userId]);
 
-  // Visual HP Interpolation
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setVisualOpponentHp(prev => {
-        const diff = opponentHp - prev;
-        if (Math.abs(diff) < 1) return opponentHp;
-        return prev + diff * 0.2; // Smooth 20% interpolation
-      });
-    }, 16);
-    return () => clearInterval(timer);
-  }, [opponentHp]);
+  // Visual HP Interpolation removed in favor of native framer motion tweens
 
   // PvP Atomic Damage Flush Loop (Pokemon GO Style)
   useEffect(() => {
@@ -499,7 +522,7 @@ export function BattleArena({
 
     const flushInterval = setInterval(() => {
       if (pvpDamageBuffer.current > 0 || needsSync.current) {
-        const damageToFlush = Math.floor(pvpDamageBuffer.current / 10);
+        const damageToFlush = pvpDamageBuffer.current / 10; // Keep float precision to not lose damage
         pvpDamageBuffer.current = 0;
         needsSync.current = false;
 
@@ -537,10 +560,20 @@ export function BattleArena({
   // Update updatePvPStats calls to ensure winnerId is present
   const handleWinStatsUpdate = () => {
     if (isPvP && pvpSessionId && userId) {
-      updatePvPStats(pvpSessionId, { 
+      const payload: any = { 
         status: 'finished', 
         winnerId: userId 
-      });
+      };
+
+      // Flush any final buffered damage that might have been skipped when the interval died
+      if (pvpDamageBuffer.current > 0) {
+        const damageToFlush = pvpDamageBuffer.current / 10;
+        const rivalHPField = isHost ? 'guestHp' : 'hostHp';
+        payload[rivalHPField] = increment(-damageToFlush);
+        pvpDamageBuffer.current = 0;
+      }
+
+      updatePvPStats(pvpSessionId, payload);
     }
   };
 
@@ -590,6 +623,29 @@ export function BattleArena({
       if (effectsTimer.current) clearInterval(effectsTimer.current);
     };
   }, [gameStatus]); // Only depend on gameStatus to start/stop the loop
+
+  // PvP Multi-Hit Damage Simulator (Smooths out 600ms chunks into visual streams)
+  const prevPlayerHp = useRef(playerHp);
+  useEffect(() => {
+    if (isPvP && gameStatus === 'active' && playerHp < prevPlayerHp.current) {
+      const damageTaken = prevPlayerHp.current - playerHp;
+      if (damageTaken > 0 && damageTaken < 1000) { // Safety check to prevent huge spikes when resetting
+        // Estimate how many hits the attacker did in 600ms based on average 30 dmg
+        const estimatedHits = Math.max(1, Math.min(8, Math.round(damageTaken / 30)));
+        const damagePerHit = Math.round(damageTaken / estimatedHits);
+        
+        for (let i = 0; i < estimatedHits; i++) {
+          setTimeout(() => {
+            // Random spread for the coordinates
+            const randomX = 40 + Math.random() * 20;
+            const randomY = 40 + Math.random() * 20;
+            spawnDamageNumber(damagePerHit, 'player', estimatedHits >= 4, randomX, randomY);
+          }, i * (500 / estimatedHits));
+        }
+      }
+    }
+    prevPlayerHp.current = playerHp;
+  }, [playerHp, isPvP, gameStatus]);
 
   // Helper to get next random opponent
   const getNextOpponent = () => {
@@ -650,6 +706,8 @@ export function BattleArena({
         }
         if (prev === 'GO') {
           clearInterval(countdownTimer.current);
+          setHasPvPStarted(true);
+          hasPvPStartedRef.current = true;
           return null;
         }
         return prev;
@@ -716,11 +774,19 @@ export function BattleArena({
 
     const isCrit = Math.random() < critChance;
     let damage = baseDmg * comboMultiplier * elementMultiplier * passiveMultiplier * frenzyMultiplier;
+
+    // Apply Opponent Defense
+    let oppDef = currentOpponent.stats.def;
+    if (opponentEffects.some(eff => eff.type === 'def_break')) oppDef *= 0.5;
+    const defenseReduction = oppDef * 0.05;
+    damage = Math.max(1, damage - defenseReduction);
+
     if (isCrit) damage *= 2;
 
-    // Status Effect: Defense Break (Opponent)
-    if (opponentEffects.some(eff => eff.type === 'def_break')) {
-      damage *= 1.3;
+    // PvP Tap Mitigation 
+    // Human tap-spam is unthrottled and can melt 1000 HP in 2s. We apply 75% mitigation.
+    if (isPvP) {
+       damage *= 0.25;
     }
 
     damage = Math.round(damage);
@@ -763,14 +829,10 @@ export function BattleArena({
       }
       
       // 4. Energy Generation (Pokemon GO style)
+      // 4. Energy Generation (Pokemon GO style)
       let energyGain = 1.0;
       if (player.passive?.effect === 'energy_boost') energyGain *= (1 + player.passive.value);
       setPlayerEnergy(prev => Math.min(MAX_ENERGY, prev + energyGain));
-
-      if (opponentHp - damage <= 0) {
-        setGameStatus('won'); 
-        handleWinStatsUpdate();
-      }
     } else {
       // Normal Bot/Wave Logic
       setOpponentHp(prev => Math.max(0, prev - damage));
@@ -859,6 +921,14 @@ export function BattleArena({
     const baseDmg = Math.round(effectivePlayerStats.atk * 1.5);
     const bonus = chargeProgress * 0.5; // Up to 50% bonus from mini-game
     let totalDmg = Math.round(baseDmg * (1 + bonus));
+
+    // Apply Defense
+    let oppDef = currentOpponent.stats.def;
+    const defenseReduction = oppDef * 0.05;
+    totalDmg = Math.max(10, totalDmg - defenseReduction);
+
+    // PvP Ultimate Mitigation (50% so it hits hard but doesn't one-shot)
+    totalDmg = Math.round(totalDmg * 0.5);
 
     // Check if rival shielded (Need to read from DB)
     // For simplicity, we assume if isCharging is null, the charge ended.
@@ -1027,7 +1097,8 @@ export function BattleArena({
           setGameStatus('lost');
           setIsFinalizing(false);
           setShowSummary(true);
-          if (onLoss) onLoss();
+          // DON'T call onLoss() here for PvP, let PvPResultScreen handle it
+          if (mode !== 'pvp' && onLoss) onLoss();
         }, 2000);
       }
     } else if (opponentHp <= 0) {
@@ -1075,14 +1146,16 @@ export function BattleArena({
       } else if (mode === 'pvp') {
         hasTriggeredWin.current = true;
         if (opponentAttackTimer.current) clearInterval(opponentAttackTimer.current);
+        handleWinStatsUpdate();
 
         const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
-        setFinalStats({
+        const stats = {
           timeTaken,
           maxCombo,
           hpRemaining: playerHp,
           totalDamage: totalDamageDealt
-        });
+        };
+        setFinalStats(stats);
 
         setIsFinalizing(true);
         playSFX('WIN');
@@ -1096,12 +1169,15 @@ export function BattleArena({
         }, 2000);
       }
     }
-  }, [playerHp, opponentHp]);
+  }, [playerHp, opponentHp, mode, currentOpponentIdx, opponentTeam, player, currentOpponent, totalDamageDealt, maxCombo, isFinalizing, gameStatus, pvpSessionId, isHost, userId, spawnDamageNumber, t, inventory, playerTeam, effectivePlayerStats, handleNextOpponent, handleWinStatsUpdate, triggerShake, eloDelta]);
 
   // Reset win trigger on new opponent
   useEffect(() => {
     hasTriggeredWin.current = false;
-  }, [currentOpponent.id]);
+    hasUpdatedElo.current = false; // Reset Elo update flag for new opponent/session
+    setEloDelta(null);
+    setNewElo(null);
+  }, [currentOpponent.id, pvpSessionId]);
 
   // Initial Start
   useEffect(() => {
@@ -1333,8 +1409,11 @@ export function BattleArena({
                       'COMMON'}
               </div>
 
-              {/* HP Bar - Brutalist Style */}
-              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white overflow-hidden ${mode === 'boss' ? 'w-80 h-12' : 'w-64 h-10'} rotate-2 shadow-[8px_8px_0_#000]`}>
+              {/* HP Bar - Brutalist Style (Opponent) */}
+              <div className={`absolute -top-12 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white overflow-hidden ${mode === 'boss' ? 'w-80 h-10' : 'w-64 h-8'} -rotate-1 shadow-[6px_6px_0_#000]`}>
+                <div className="absolute top-0 left-2 z-10 text-[7px] font-black text-white mix-blend-difference uppercase italic">
+                   Rival Integrity: {Math.round(opponentHp)}
+                </div>
                 {isRivalAttacking && mode === 'pvp' && (
                   <motion.div
                     initial={{ opacity: 0, x: '-50%', y: 0 }}
@@ -1352,12 +1431,13 @@ export function BattleArena({
                 <motion.div
                   className={`h-full ${mode === 'boss' ? 'bg-purple-600' : 'bg-red-600'} relative`}
                   initial={{ width: '100%' }}
-                   animate={{ width: `${Math.max(0, Math.min(100, (visualOpponentHp / (currentOpponent.stats.hp * 10)) * 100))}%` }}
+                  animate={{ width: `${Math.max(0, Math.min(100, (opponentHp / (mode === 'pvp' ? 1000 : currentOpponent.stats.hp * 10)) * 100))}%` }}
+                  transition={{ type: "tween", duration: 0.15, ease: "easeOut" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
-                <span className={`absolute inset-0 flex items-center justify-center font-glitch text-white italic drop-shadow-[4px_4px_0_#000] tracking-tighter uppercase ${mode === 'boss' ? 'text-xl' : 'text-base'}`}>
-                  {mode === 'pvp' ? (rivalName ? `DUEL VS ${rivalName}` : `ONLINE RIVAL`) : currentOpponent.name}
+                <span className={`absolute inset-0 flex items-center justify-center font-glitch text-white italic drop-shadow-[2px_2px_0_#000] tracking-tighter uppercase ${mode === 'boss' ? 'text-lg' : 'text-xs'}`}>
+                  {mode === 'pvp' ? (rivalName ? rivalName : `ONLINE RIVAL`) : currentOpponent.name}
                 </span>
               </div>
 
@@ -1392,13 +1472,16 @@ export function BattleArena({
           <div className="flex flex-col items-center relative z-10 pb-10">
             {mode === 'pvp' && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 bg-red-600 border-2 border-black px-4 py-1 shadow-[4px_4px_0_#000] rotate-1 z-50 whitespace-nowrap"
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-8 relative z-[60]"
               >
-                <span className="text-[10px] font-black text-white uppercase italic animate-pulse">
-                  {rivalName ? `DUELING ${rivalName}` : 'REAL-TIME RIVAL CONNECTED'}
-                </span>
+                <div className="absolute inset-0 bg-red-600 blur-md opacity-50 animate-pulse" />
+                <div className="relative bg-black border-2 border-red-600 px-6 py-1 -rotate-1 skew-x-[-10deg] shadow-[4px_4px_0_#ef4444]">
+                  <span className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] italic animate-pulse">
+                    {rivalName ? `DUELING: ${rivalName}` : 'RIVAL LINK STABILIZED'}
+                  </span>
+                </div>
               </motion.div>
             )}
             <motion.div
@@ -1440,18 +1523,22 @@ export function BattleArena({
                 <div className="absolute inset-0 border-4 border-black/40 pointer-events-none" />
               </div>
 
-              {/* HP Bar - Player */}
-              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-72 h-12 bg-black border-[4px] border-white overflow-hidden -rotate-2 shadow-[-8px_8px_0_#000]">
+              {/* HP Bar - Player (Moved to Bottom) */}
+              <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 bg-black border-[4px] border-white overflow-hidden w-64 h-8 rotate-1 shadow-[6px_6px_0_#000]">
+                <div className="absolute top-0 left-2 z-10 text-[7px] font-black text-white mix-blend-difference uppercase italic">
+                   Unit Integrity: {Math.round(playerHp)}
+                </div>
                 <div className="absolute inset-0 bg-noise opacity-30" />
                 <motion.div
                   className="h-full bg-cyan-500 relative"
                   initial={{ width: '100%' }}
-                   animate={{ width: `${Math.max(0, Math.min(100, (playerHp / (effectivePlayerStats.hp * 10)) * 100))}%` }}
+                  animate={{ width: `${Math.max(0, Math.min(100, (playerHp / (mode === 'pvp' ? 1000 : effectivePlayerStats.hp * 10)) * 100))}%` }}
+                  transition={isPvP ? { type: "tween", duration: 0.6, ease: "linear" } : { type: "spring", stiffness: 300, damping: 30 }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />
                 </motion.div>
                 <span className="absolute inset-0 flex items-center justify-center text-xl font-glitch text-white italic drop-shadow-[4px_4px_0_#000] tracking-tighter">
-                  HP: {playerHp}
+                  HP: {Math.round(playerHp)}
                 </span>
 
                 {/* Shield Indicator (Player) */}
@@ -1561,8 +1648,8 @@ export function BattleArena({
           </AnimatePresence>
 
           {/* VS Screen / Handshake Overlay for PvP */}
-        {mode === 'pvp' && countdown === null && (
-          <div className="absolute inset-0 z-[110] bg-black/90 flex flex-col items-center justify-center p-6 text-center">
+        {mode === 'pvp' && !hasPvPStarted && countdown === null && (
+          <div className="absolute inset-0 z-[110] bg-black/90 flex flex-col items-center justify-center p-6 text-center pointer-events-auto">
              <div className="relative mb-12">
                 <div className="absolute -inset-8 bg-red-600/20 blur-3xl animate-pulse" />
                 <h2 className="font-marker text-8xl text-white italic tracking-tighter drop-shadow-[0_10px_20px_rgba(255,0,0,0.5)]">VS</h2>
@@ -1707,7 +1794,18 @@ export function BattleArena({
         {/* Game Over Overlay */}
         {showSummary && (
           <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center pointer-events-auto p-6">
-            {gameStatus === 'won' && (mode === 'classic' || mode === 'boss' || mode === 'gang_war') && finalStats ? (
+            {mode === 'pvp' && eloDelta !== null && newElo !== null ? (
+              <PvPResultScreen
+                player={player}
+                opponent={currentOpponent}
+                isWinner={gameStatus === 'won'}
+                eloChange={eloDelta}
+                newElo={newElo}
+                stats={finalStats || { timeTaken: 0, maxCombo: 0, totalDamage: 0 }}
+                language={language}
+                onContinue={onClose}
+              />
+            ) : gameStatus === 'won' && (mode === 'classic' || mode === 'boss' || mode === 'gang_war') && finalStats ? (
               <BattleVictory
                 player={player}
                 opponent={currentOpponent}

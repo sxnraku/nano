@@ -4,6 +4,7 @@ import { Sword, Users, X, RefreshCw, Trophy, Zap } from 'lucide-react';
 import { auth, createPvPSession, findPvPSessions, joinPvPSession, subscribeToPvPSession, type PVPSession } from '../services/firebase';
 import type { WarriorData } from '../services/gemini';
 import { translations, type Language } from '../services/localizationService';
+import { getRankByElo } from '../data/ranks';
 
 interface PvPLobbyProps {
   user: any;
@@ -149,9 +150,15 @@ export const PvPLobby: React.FC<PvPLobbyProps> = ({ user, currentWarrior, onClos
                           />
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-black text-zinc-500 uppercase leading-none mb-1">
-                            {room.hostName}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-zinc-500 uppercase leading-none">
+                              {room.hostName}
+                            </span>
+                            <div className="flex items-center gap-1 bg-black/40 px-1.5 py-0.5 border border-zinc-800 rounded">
+                               <span className="text-[9px]">{getRankByElo(room.hostElo || 1000).icon}</span>
+                               <span className="text-[9px] font-black text-yellow-500">{room.hostElo || 1000}</span>
+                            </div>
+                          </div>
                           <span className="text-sm font-black text-white italic truncate w-32">
                             {JSON.parse(room.hostWarrior).name}
                           </span>
