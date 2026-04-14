@@ -17,7 +17,7 @@ export const usePlayerStats = (collection: WarriorData[], addToast: (msg: string
         let lastDate = stats.lastEnergyDate;
 
         if (lastDate !== today) {
-          currentEnergy = 5;
+          // removed daily free energy
           lastDate = today;
         }
 
@@ -29,7 +29,8 @@ export const usePlayerStats = (collection: WarriorData[], addToast: (msg: string
           activeBuffs: stats.activeBuffs || [],
           scanEnergy: currentEnergy,
           lastEnergyDate: lastDate,
-          elo: stats.elo || 1000
+          elo: stats.elo || 1000,
+          scanHistory: stats.scanHistory || {}
         };
       } catch (e) {
         console.error("Failed to parse saved stats", e);

@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Scanner } from './components/Scanner';
 import { WarriorCard } from './components/WarriorCard';
 import { analyzeAndCreateWarrior, generateWarriorImage, type WarriorData, type Weapon } from './services/gemini';
+import { calculateImageHash, calculateHammingDistance } from './utils/imageHash';
 import { motion, AnimatePresence } from 'motion/react';
-import { Scan, Users, MapPin, Sparkles, Trash2, Sword, Swords, Trophy, XCircle, RefreshCw, X, Zap, Info, Target, Settings, Database, Skull, Share2, Dna, Shield, Flame, UserCircle } from 'lucide-react';
+import { Scan, Users, MapPin, Sparkles, Trash2, Sword, Swords, Trophy, XCircle, RefreshCw, X, Zap, Info, Target, Settings, Database, Skull, Share2, Dna, Shield, Flame, UserCircle, Volume2, VolumeX } from 'lucide-react';
+import { useAudio } from './services/audioService';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 import { MOCK_OPPONENTS } from './data/mocks';
 import { BattleArena } from './components/BattleArena';
@@ -65,6 +67,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isScanBarrierOpen, setIsScanBarrierOpen] = useState(false);
   const [isLegalDocsOpen, setIsLegalDocsOpen] = useState(false);
   const [isProgressionOpen, setIsProgressionOpen] = useState(false);
   const [isWarriorDetailsOpen, setIsWarriorDetailsOpen] = useState(false);
@@ -113,6 +116,8 @@ export default function App() {
     updateStats
   } = usePlayerStats(collection, addToast, language);
 
+  const { isMuted, toggleMute, playMusic } = useAudio();
+
   const {
     isMatchmaking,
     isMatchFound,
@@ -158,16 +163,26 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Set initial loading to false when auth is ready
-  useEffect(() => {
-    if (authInitialized) {
-      // Small delay to ensure collection loading has a chance to start
-      const timer = setTimeout(() => {
-        setIsAppInitialLoading(false);
-      }, 1500); // Minimum splash time
-      return () => clearTimeout(timer);
-    }
   }, [authInitialized]);
+
+  // Audio Unlock Logic (Browser limitation)
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (!isMuted) {
+        playMusic(activeBattle ? 'battle' : 'menu');
+      }
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, [isMuted, playMusic, activeBattle]);
 
 
   const handleCloudSave = async () => {
@@ -288,6 +303,29 @@ export default function App() {
       const warriorData = await analyzeAndCreateWarrior(imageData);
       setProcessingStep(t.scan_step_generating);
 
+      const newHash = await calculateImageHash(imageData);
+      let isCloned = false;
+      let existingHashToUpdate = newHash;
+      let penaltyMultiplier = 1;
+
+      const history = playerStats.scanHistory || {};
+      for (const [hash, count] of Object.entries(history)) {
+        if (calculateHammingDistance(newHash, hash) < 8) {
+           isCloned = true;
+           existingHashToUpdate = hash;
+           penaltyMultiplier = Math.pow(0.8, count);
+           break;
+        }
+      }
+
+      if (isCloned) {
+        warriorData.stats.hp = Math.max(10, Math.round(warriorData.stats.hp * penaltyMultiplier));
+        warriorData.stats.atk = Math.max(5, Math.round(warriorData.stats.atk * penaltyMultiplier));
+        warriorData.stats.def = Math.max(5, Math.round(warriorData.stats.def * penaltyMultiplier));
+        warriorData.stats.spd = Math.max(5, Math.round(warriorData.stats.spd * penaltyMultiplier));
+        warriorData.name = `[CLONE] ${warriorData.name}`;
+      }
+
       // Step 2: Generate Image
       const imageUrl = await generateWarriorImage(warriorData.visualPrompt, imageData);
 
@@ -306,19 +344,44 @@ export default function App() {
       setPlayerStats(prev => ({
         ...prev,
         scrap: (prev.scrap || 0) + scrapReward,
-        xp: (prev.xp || 0) + xpReward
+        xp: (prev.xp || 0) + xpReward,
+        scanHistory: {
+          ...(prev.scanHistory || {}),
+          [existingHashToUpdate]: ((prev.scanHistory || {})[existingHashToUpdate] || 0) + 1
+        }
       }));
 
       handleNavigate('collection'); // Go to view result
       setIsScanModalOpen(false); // Close modal
-      addToast(t.toast_warrior_materialized.replace('{scrap}', scrapReward.toString()).replace('{xp}', xpReward.toString()), "success");
+      
+      if (isCloned) {
+        addToast("MALDIÇÃO DE CLONAGEM! -20% STATS BÁSICOS APLICADO! (Objeto Repetido)", "error");
+      } else {
+        addToast(t.toast_warrior_materialized.replace('{scrap}', scrapReward.toString()).replace('{xp}', xpReward.toString()), "success");
+      }
 
       // Trigger Particles
       spawnParticles('scrap', scrapReward, window.innerWidth / 2, window.innerHeight / 2);
       spawnParticles('xp', xpReward, window.innerWidth / 2, window.innerHeight / 2);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create warrior:", error);
-      addToast(t.toast_gen_failed, "error");
+      
+      if (error?.message === "UNSAFE_CONTENT") {
+        addToast("AVISO DE SEGURANÇA: Conteúdo inadequado detetado. Processo abortado.", "error");
+        // Refund Energy
+        setPlayerStats(prev => ({
+          ...prev,
+          scanEnergy: prev.scanEnergy + 1
+        }));
+      } else {
+        addToast(t.toast_gen_failed, "error");
+        // Refund Energy on generic generation fail to be fair
+        setPlayerStats(prev => ({
+          ...prev,
+          scanEnergy: prev.scanEnergy + 1
+        }));
+      }
+
       setIsScanModalOpen(false); // Always close modal on error so user is not stuck
     } finally {
       setIsProcessing(false);
@@ -1006,6 +1069,15 @@ export default function App() {
               <button onClick={() => setIsLeaderboardOpen(true)} className="w-10 h-10 sm:w-11 sm:h-11 bg-yellow-400 border-[3px] sm:border-4 border-black rounded-sm flex items-center justify-center shadow-[2px_2px_0_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all hover:bg-yellow-300 shrink-0">
                 <img src="/icon_trophy.png" className="w-6 h-6 sm:w-7 sm:h-7 object-contain mix-blend-multiply contrast-125" alt="leaderboard" />
               </button>
+              <button 
+                onClick={() => {
+                  toggleMute();
+                  if (isMuted) playMusic();
+                }} 
+                className={`w-10 h-10 sm:w-11 sm:h-11 border-[3px] sm:border-4 border-black rounded-sm flex items-center justify-center shadow-[2px_2px_0_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all shrink-0 ${isMuted ? 'bg-zinc-800 text-zinc-500' : 'bg-green-500 text-black'}`}
+              >
+                {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
@@ -1045,7 +1117,7 @@ export default function App() {
             {/* Energy Badge */}
             {/* Energy Badge */}
             <button
-              onClick={() => addToast("Scan batteries recharge automatically every day. Come back tomorrow for more!", "info")}
+              onClick={() => setIsPremiumStoreOpen(true)}
               className="flex-1 min-w-0 bg-green-600 border-2 sm:border-[4px] border-black p-1 sm:p-1.5 flex items-center gap-1 sm:gap-2 shadow-[2px_2px_0_rgba(0,0,0,1)] sm:shadow-[4px_4px_0_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all hover:bg-green-500 hover:scale-[1.02] overflow-hidden relative"
             >
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-20" />
@@ -1054,7 +1126,7 @@ export default function App() {
               </div>
               <div className="flex flex-col items-start leading-[1.1] min-w-0 overflow-hidden z-10">
                 <span className="text-[6px] sm:text-[8px] font-black text-green-200 uppercase tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis w-full text-left">Energy</span>
-                <span className="text-sm sm:text-xl font-black text-white font-mono">{playerStats.scanEnergy ?? 5}/5</span>
+                <span className="text-sm sm:text-xl font-black text-white font-mono">{playerStats.scanEnergy ?? 0}</span>
               </div>
             </button>
           </div>
@@ -1153,6 +1225,84 @@ export default function App() {
             language={language}
           />
         )}
+        {isScanBarrierOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/95 backdrop-blur-xl"
+                onClick={() => setIsScanBarrierOpen(false)}
+            />
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 50 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 50 }}
+                className="relative w-full max-w-sm bg-zinc-950 border-4 border-cyan-400 shadow-[0_0_60px_rgba(34,211,238,0.2)] flex flex-col max-h-[90vh] overflow-hidden pointer-events-auto"
+            >
+                <div className="bg-cyan-500 p-6 border-b-4 border-black relative overflow-hidden shrink-0">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-20" />
+                    <button
+                        onClick={() => setIsScanBarrierOpen(false)}
+                        className="absolute top-4 right-4 z-50 p-2 bg-black text-white border-2 border-white shadow-[4px_4px_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl font-marker text-black uppercase -rotate-1">SCAN <span className="text-white">BARRIER</span></h2>
+                        <p className="text-[10px] text-zinc-900 font-bold uppercase mt-1">Energy Depleted. Materialization requires processing power.</p>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-900 border-t-2 border-zinc-700">
+                    <button
+                        onClick={async () => {
+                            try {
+                                const success = await handleWatchAd();
+                                if (success) {
+                                    setIsScanBarrierOpen(false);
+                                    setIsScanModalOpen(true);
+                                }
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }}
+                        className="w-full p-4 bg-zinc-800 border-2 border-white border-dashed hover:border-solid hover:border-yellow-400 transition-all group flex items-center justify-between"
+                    >
+                        <div className="flex items-center gap-4">
+                            <Zap className="w-10 h-10 text-yellow-400" />
+                            <div className="text-left">
+                                <p className="font-black text-white uppercase italic">Sponsor Link</p>
+                                <p className="text-[10px] text-zinc-400 font-bold uppercase">Watch Ad to Scan</p>
+                            </div>
+                        </div>
+                        <div className="px-3 py-1 bg-yellow-400 text-black text-xs font-black border-2 border-black -rotate-6">FREE</div>
+                    </button>
+                    <button
+                        disabled={(playerStats.nanites || 0) < 50}
+                        onClick={() => {
+                            if ((playerStats.nanites || 0) >= 50) {
+                                setPlayerStats(prev => ({ ...prev, nanites: (prev.nanites || 0) - 50 }));
+                                setIsScanBarrierOpen(false);
+                                setIsScanModalOpen(true);
+                            }
+                        }}
+                        className={`w-full p-4 bg-zinc-950 border-2 ${(playerStats.nanites || 0) >= 50 ? 'border-zinc-700 hover:border-white cursor-pointer' : 'border-zinc-800 opacity-50 cursor-not-allowed'} transition-all group flex items-center justify-between`}
+                    >
+                        <div className="flex items-center gap-4">
+                            <Database className="w-10 h-10 text-cyan-400" />
+                            <div className="text-left">
+                                <p className="font-black text-white uppercase italic">Direct Access</p>
+                                <p className="text-[10px] text-zinc-400 font-bold uppercase cursor-pointer">Instant Materialization</p>
+                            </div>
+                        </div>
+                        <div className="px-3 py-1 bg-cyan-500 text-black text-xs font-black border-2 border-black -rotate-6 flex gap-1 items-center">
+                            50 <GachiIcon type="NANITE" className="w-3 h-3" />
+                        </div>
+                    </button>
+                </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       <ChallengeHandler onAcceptChallenge={handleAcceptChallenge} />
@@ -1184,7 +1334,11 @@ export default function App() {
                 {/* Main Scan Button */}
                 <button
                   onClick={() => {
-                    setIsScanModalOpen(true);
+                    if ((playerStats.scanEnergy || 0) > 0) {
+                      setIsScanModalOpen(true);
+                    } else {
+                      setIsScanBarrierOpen(true);
+                    }
                   }}
                   className="group relative w-44 h-44 flex items-center justify-center shrink-0 z-10"
                 >

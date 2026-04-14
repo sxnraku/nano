@@ -202,6 +202,8 @@ body,
   background-size: 40px 40px, 40px 40px, 10px 10px;
   background-position: -2px -2px, -2px -2px, 0 0;
   color: white;
+  user-select: none;
+  -webkit-user-select: none;
   overscroll-behavior-y: contain;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;

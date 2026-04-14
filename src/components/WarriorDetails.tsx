@@ -152,6 +152,17 @@ export function WarriorDetails({ warrior, isOpen, onClose, scrap, nanites, onUpg
   const rarity = warrior.rarity || 'Common';
   const styles: WarriorStyle[] = ['Default', 'Glitch', 'Neon', 'Cyber', 'Dark', 'Retro'];
 
+  const getElementSynergy = (element: string) => {
+    const el = element.toLowerCase();
+    if (el.includes('fogo') || el.includes('magma') || el.includes('fire') || el.includes('brasa')) return { strong: 'Planta, Natureza', weak: 'Água, Gelo' };
+    if (el.includes('planta') || el.includes('terra') || el.includes('plant') || el.includes('natureza')) return { strong: 'Água, Gelo', weak: 'Fogo, Magma' };
+    if (el.includes('água') || el.includes('gelo') || el.includes('water') || el.includes('mar')) return { strong: 'Fogo, Magma', weak: 'Planta, Elétrico' };
+    if (el.includes('elétrico') || el.includes('raio') || el.includes('electric') || el.includes('trovão')) return { strong: 'Água, Gelo', weak: 'Nenhum' };
+    return { strong: 'Neutro', weak: 'Neutro' };
+  };
+
+  const synergy = getElementSynergy(warrior.element);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div
@@ -317,6 +328,33 @@ export function WarriorDetails({ warrior, isOpen, onClose, scrap, nanites, onUpg
             <StatRow label="Attack (ATK)" value={warrior.stats.atk} icon={Sword} statKey="atk" iconType="ATK" />
             <StatRow label="Defense (DEF)" value={warrior.stats.def} icon={Shield} statKey="def" iconType="DEF" />
             <StatRow label="Speed (SPD)" value={warrior.stats.spd} icon={Zap} statKey="spd" iconType="SPD" />
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3">
+             {warrior.passive && (
+                <div className="bg-zinc-900 border-l-4 border-cyan-500 p-3 flex flex-col relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-5">
+                      <Activity className="w-16 h-16" />
+                    </div>
+                    <span className="text-[10px] text-cyan-500 uppercase font-bold mb-1 flex items-center gap-1 z-10">
+                      <Activity className="w-3 h-3" /> Passiva Tática
+                    </span>
+                    <span className="text-sm text-white font-black uppercase italic z-10">{warrior.passive.name}</span>
+                    <span className="text-xs text-zinc-400 mt-1 z-10 leading-tight">+{warrior.passive.description}</span>
+                </div>
+             )}
+             
+             <div className="border border-zinc-800 bg-zinc-950 p-3 flex justify-between items-center relative overflow-hidden group">
+                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10" />
+                 <div className="relative z-10">
+                     <span className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block leading-tight">Sinergia Elemental</span>
+                     <span className="text-sm font-black uppercase text-purple-400">{warrior.element}</span>
+                 </div>
+                 <div className="relative z-10 flex flex-col items-end text-right gap-1">
+                     <span className="text-[10px] uppercase font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 border border-green-500/20 leading-none">🔥 Vantagem: {synergy.strong}</span>
+                     <span className="text-[10px] uppercase font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 border border-red-500/20 leading-none">🛡️ Fraqueza: {synergy.weak}</span>
+                 </div>
+             </div>
           </div>
 
 

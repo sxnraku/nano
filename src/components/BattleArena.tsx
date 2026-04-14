@@ -177,8 +177,16 @@ export function BattleArena({
   user
 }: BattleArenaProps) {
   const t = translations[language];
-  const { playSFX } = useAudio();
+  const { playSFX, playMusic } = useAudio();
   const controls = useAnimation(); // For camera shake
+
+  // Global battle music state
+  useEffect(() => {
+    playMusic('battle');
+    return () => {
+      playMusic('menu');
+    };
+  }, []);
 
   // Consume buffs on mount
   useEffect(() => {
@@ -385,7 +393,7 @@ export function BattleArena({
     
     setTimeout(() => {
       setDamageNumbers(prev => prev.filter(dn => dn.id !== id));
-    }, 800);
+    }, 560);
   };
 
   // PvP Real-time Sync
@@ -459,7 +467,7 @@ export function BattleArena({
       const rivalSpecial = isHost ? session.guestSpecial : session.hostSpecial;
       if (rivalSpecial && !isRivalSpecial) {
         setIsRivalSpecial(true);
-        setTimeout(() => setIsRivalSpecial(false), 2000);
+        setTimeout(() => setIsRivalSpecial(false), 1400);
       }
 
       // 6. Connectivity & Status
@@ -547,13 +555,13 @@ export function BattleArena({
       triggerShake(20, 0.4); // Huge shake for special
       vibrate([100, 50, 100]);
       setIsPlayerHit(true);
-      setTimeout(() => setIsPlayerHit(false), 500);
+      setTimeout(() => setIsPlayerHit(false), 350);
       spawnDamageNumber(0, 'player', true, 50, 50, 'ULTIMATE HIT!!');
     } else if (isRivalAttacking && gameStatus === 'active') {
       triggerShake(6, 0.15);
       vibrate(40);
       setIsPlayerHit(true);
-      setTimeout(() => setIsPlayerHit(false), 200);
+      setTimeout(() => setIsPlayerHit(false), 140);
     }
   }, [isRivalAttacking, isRivalSpecial, gameStatus]);
 
@@ -712,7 +720,7 @@ export function BattleArena({
         }
         return prev;
       });
-    }, 800); // Slightly faster for punchier feel
+    }, 560); // 30% faster countdown
 
     return () => clearInterval(countdownTimer.current);
   }, [countdown]);
@@ -750,7 +758,7 @@ export function BattleArena({
     // Reset combo timer (if not in frenzy)
     if (comboTimer.current) clearTimeout(comboTimer.current);
     if (!isFrenzyActive) {
-      comboTimer.current = setTimeout(() => setCombo(0), 1000);
+      comboTimer.current = setTimeout(() => setCombo(0), 700);
     }
     setComboTimerKey(prev => prev + 1);
 
@@ -806,7 +814,7 @@ export function BattleArena({
     // Hit Stop on final blow or high crit
     if ((newOppHp === 0 || (isCrit && !isFrenzyActive)) && !isHitStopping) {
       setIsHitStopping(true);
-      setTimeout(() => setIsHitStopping(false), 80); // Lighter hitstop for mobile
+      setTimeout(() => setIsHitStopping(false), 56); // Lighter hitstop for mobile
     }
 
     setOpponentHp(newOppHp);
@@ -865,12 +873,16 @@ export function BattleArena({
 
     // Visuals
     setIsOpponentHit(true);
-    setTimeout(() => setIsOpponentHit(false), 80);
+    setTimeout(() => setIsOpponentHit(false), 56);
 
     setIsFlashActive(true);
-    setTimeout(() => setIsFlashActive(false), 40);
+    setTimeout(() => setIsFlashActive(false), 28);
 
-    spawnDamageNumber(damage, 'opponent', isCrit, undefined, undefined, isFrenzyActive ? 'FRENZY!' : undefined, getElement(player));
+    let hitText = isFrenzyActive ? 'FRENZY!' : undefined;
+    if (elementMultiplier > 1 && !isFrenzyActive) hitText = 'SUPER EFETIVO! 🔥';
+    else if (elementMultiplier < 1 && !isFrenzyActive) hitText = 'RESISTIDO 🛡️';
+
+    spawnDamageNumber(damage, 'opponent', isCrit, undefined, undefined, hitText, getElement(player));
   }, [gameStatus, playerEffects, combo, maxCombo, effectivePlayerStats, player, currentOpponent, opponentEffects, teamSynergy, isHitStopping, isFrenzyActive, opponentHp, playerHp]);
 
   // Special Attack -> Now "CHARGED ATTACK" (Pokemon GO Style)
@@ -897,10 +909,10 @@ export function BattleArena({
       setPlayerEnergy(0);
       chargeStartTime.current = Date.now();
 
-      // 2. Auto-finish after 2.5s
+      // 2. Auto-finish after 1.75s (30% faster)
       setTimeout(() => {
         finalizeChargedAttack();
-      }, 2500);
+      }, 1750);
     } else {
       // Normal PVE Frenzy
       setIsFrenzyActive(true);
@@ -910,7 +922,7 @@ export function BattleArena({
       if (frenzyTimer.current) clearTimeout(frenzyTimer.current);
       frenzyTimer.current = setTimeout(() => {
         setIsFrenzyActive(false);
-      }, 6000);
+      }, 4200);
     }
   };
 
@@ -944,7 +956,7 @@ export function BattleArena({
     
     setTimeout(() => {
       updatePvPStats(pvpSessionId, { [isHost ? 'hostSpecial' : 'guestSpecial']: false });
-    }, 1000);
+    }, 700);
 
     spawnDamageNumber(totalDmg, 'opponent', true, 50, 40, 'KO! 🔥');
     playSFX('WIN');
@@ -993,7 +1005,7 @@ export function BattleArena({
   useEffect(() => {
     if (gameStatus !== 'active' || isPvP || countdown !== null || isFinalizing) return; // No bot attacks in PvP or during countdown/finalizing
 
-    const attackInterval = Math.max(800, 2000 - (opponentRef.current.stats.spd * 15)); // Slower but steadier interval
+    const attackInterval = Math.max(560, 1400 - (opponentRef.current.stats.spd * 11)); // 30% faster opponent attacks
 
     opponentAttackTimer.current = setInterval(() => {
       // Check Stun
@@ -1032,8 +1044,13 @@ export function BattleArena({
       setIsPlayerHit(true);
       if ('vibrate' in navigator) navigator.vibrate(30); // Lighter vibration
       triggerShake(6); // Lighter shake
-      setTimeout(() => setIsPlayerHit(false), 120);
-      spawnDamageNumber(damage, 'player', false, 50, 60);
+      setTimeout(() => setIsPlayerHit(false), 84);
+
+      let oppHitText = undefined;
+      if (elementMultiplier > 1) oppHitText = 'ALVO FRACO! ⚠️';
+      else if (elementMultiplier < 1) oppHitText = 'DEFESA FORTE 🛡️';
+
+      spawnDamageNumber(damage, 'player', false, 50, 60, oppHitText);
       console.log(`Opponent attacked for ${damage} damage. HP remaining: ${playerHp - damage}`);
 
     }, attackInterval);
@@ -1058,7 +1075,7 @@ export function BattleArena({
           }
           return prev - 1;
         });
-      }, 1000);
+      }, 700); // 30% faster blitz timer
     }
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
@@ -1099,7 +1116,7 @@ export function BattleArena({
           setShowSummary(true);
           // DON'T call onLoss() here for PvP, let PvPResultScreen handle it
           if (mode !== 'pvp' && onLoss) onLoss();
-        }, 2000);
+        }, 1400);
       }
     } else if (opponentHp <= 0) {
       if (mode === 'gang_war' && currentOpponentIdx < opponentTeam.length - 1) {
@@ -1132,7 +1149,7 @@ export function BattleArena({
           setGameStatus('won');
           setIsFinalizing(false);
           setShowSummary(true);
-        }, 2000);
+        }, 1400);
       } else if (mode === 'survival') {
         hasTriggeredWin.current = true;
         if (opponentAttackTimer.current) clearInterval(opponentAttackTimer.current);
@@ -1166,7 +1183,7 @@ export function BattleArena({
           setGameStatus('won');
           setIsFinalizing(false);
           setShowSummary(true);
-        }, 2000);
+        }, 1400);
       }
     }
   }, [playerHp, opponentHp, mode, currentOpponentIdx, opponentTeam, player, currentOpponent, totalDamageDealt, maxCombo, isFinalizing, gameStatus, pvpSessionId, isHost, userId, spawnDamageNumber, t, inventory, playerTeam, effectivePlayerStats, handleNextOpponent, handleWinStatsUpdate, triggerShake, eloDelta]);

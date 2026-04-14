@@ -98,9 +98,10 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
     Com base nisso, crie um personagem guerreiro RPG "Nano Verse".
     
     Regras de Criação:
-    - Se for um objeto eletrônico -> Tecnomago ou Cyber-Guerreiro.
-    - Se for planta/natural -> Elemental ou Druida.
-    - Se for ferramenta -> Berserker ou Construtor.
+    - Se a imagem contiver violência explícita, material explícito adulto ou inapropriado para a loja de aplicações, RECUSE e retorne estritamente: { "error": "unsafe" }
+    - Se for uma PESSOA -> Crie um Guerreiro Humanoide (Cyberpunk, Ninja, Mago, etc).
+    - Se for um ANIMAL -> Crie uma Besta Mutante ou Mascote de Combate feroz.
+    - Se for um OBJETO inanimado (ex: garrafa, teclado, maçã) -> Crie um Monstro Senciente, Mecha ou Golem inspirado na forma e utilidade do objeto. O objeto tem de ganhar vida!
     - Seja criativo com o nome e a classe.
 
     Regras de Raridade (baseado na complexidade/unicidade do objeto):
@@ -116,7 +117,7 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
       "element": "Elemento (ex: Elétrico, Fogo, Planta)",
       "rarity": "Common" | "Rare" | "Epic" | "Legendary",
       "description": "Uma breve descrição da personalidade e origem.",
-      "visualPrompt": "Personagem estilo MANGA PUNK / GRAFFITI, traços grossos de nanquim, sombras duras (sem degradê suave), cores vibrantes e saturadas (amarelo neon, roxo, ciano). Estilo visual urbano e estilizado. O personagem DEVE ESTAR NA MESMA POSE AND HAVE THE SAME FACIAL EXPRESSION AS THE ORIGINAL PHOTO (ex: [descreva a pose/expressão identificada]). Aparência urbana, suja mas estilosa, com contornos pretos bem definidos. Fundo abstrato com graffiti.",
+      "visualPrompt": "Personagem estilo MANGA PUNK / GRAFFITI, traços grossos de nanquim, sombras duras. Se a foto original era de um OBJETO, este deve agora ser um monstro/robô vivo com braços, pernas ou rosto, mas cuja estrutura base lembre o objeto original! Se era uma PESSOA ou ANIMAL, mantenha a pose/posição, mas com roupagem/armadura Gachi agressiva.",
       "originalObject": "Nome do objeto identificado",
       "stats": {
         "hp": 100,
@@ -146,8 +147,11 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
     
     // Clean up markdown code blocks if present
     const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
+    const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'> & { error?: string };
     
-    const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'>;
+    if (data.error === "unsafe") {
+      throw new Error("UNSAFE_CONTENT");
+    }
     
     // Assign passive based on class/element
     const passive = assignPassive(data.class, data.element);
@@ -180,11 +184,11 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
     case 'Cyber': stylePrompt = "Estilo CYBERPUNK, circuitos, metal cromado, implantes tecnológicos, HUD futurista, fios e cabos."; break;
     case 'Dark': stylePrompt = "Estilo DARK FANTASY, sombras profundas, atmosfera gótica, cores desaturadas, visual ameaçador, fumaça."; break;
     case 'Retro': stylePrompt = "Estilo RETRO 80s ANIME, cores pastéis, granulado de filme, estética VHS, lo-fi."; break;
-    default: stylePrompt = "Estilo MANGA PUNK / GRAFFITI ART. Traços pretos grossos e definidos (ink outlines). Sombras duras (cel-shading agressivo)."; break;
+    default: stylePrompt = "Estilo MANGA CARTOON GACHA PUNK / GRAFFITI ART. Ilustração 2D pura. Traços pretos grossos (ink outlines). Sombras cel-shading duro. PROIBIDO FOTOREALISMO."; break;
   }
 
   try {
-    const enhancedPrompt = `${visualPrompt} ${stylePrompt} Cores vibrantes e saturadas. Estética urbana e estilizada. Fundo abstrato com formas geométricas ou graffiti. A imagem deve respeitar a pose e expressão descritas.`;
+    const enhancedPrompt = `[CRITICAL: DO NOT GENERATE PHOTOREALISM. MUST BE A 2D ILLUSTRATION ONLY] Transforme a foto original completamente num DESENHO. ${visualPrompt} ${stylePrompt} Cores vibrantes e saturadas de banda desenhada/anime. Desenhe o formato em estilo Cartoon 2D, substituindo texturas reais por tinta lisa. A imagem deve manter a forma mas parecer desenhada à mão!`;
 
     const parts: any[] = [{ text: enhancedPrompt }];
     

@@ -47,6 +47,7 @@ export interface PlayerStats {
   guildId?: string | null;
   trophies: string[];
   elo: number;
+  scanHistory: Record<string, number>;
 }
 
 export const INITIAL_STATS: PlayerStats = {
@@ -79,12 +80,12 @@ export const INITIAL_STATS: PlayerStats = {
       type: 'battle_win'
     },
     {
-      id: 'm3',
-      title: 'Collector',
-      description: 'Have 5 warriors in your gang.',
-      target: 5,
+      id: 'm10',
+      title: 'Collectionist IV',
+      description: 'Reach a collection size of 40.',
+      target: 40,
       current: 0,
-      rewardXP: 150,
+      rewardXP: 600,
       completed: false,
       type: 'collection_size'
     }
@@ -92,15 +93,15 @@ export const INITIAL_STATS: PlayerStats = {
   inventory: [],
   consumables: {},
   activeBuffs: [],
-  scanEnergy: 5,
+  scanEnergy: 0, // Inicia a 0 no novo modelo de barreira
   lastEnergyDate: new Date().toISOString().split('T')[0],
   nanites: 0,
   highestWave: 0,
   highestBlitzScore: 0,
   highestCombo: 0,
-  guildId: null,
   trophies: [],
-  elo: 1000
+  elo: 1000,
+  scanHistory: {}
 };
 
 interface ProgressionSystemProps {
