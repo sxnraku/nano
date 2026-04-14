@@ -7,6 +7,7 @@ export class ImageManager {
 
   /**
    * Universal optimization for any image intended for Firestore
+   * 
    */
   static async optimizeForStorage(dataUrl: string): Promise<string> {
     if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
