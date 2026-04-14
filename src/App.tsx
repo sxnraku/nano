@@ -163,6 +163,15 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Set initial loading to false when auth is ready
+  useEffect(() => {
+    if (authInitialized) {
+      // Small delay to ensure collection loading has a chance to start
+      const timer = setTimeout(() => {
+        setIsAppInitialLoading(false);
+      }, 1500); // Minimum splash time
+      return () => clearTimeout(timer);
+    }
   }, [authInitialized]);
 
   // Audio Unlock Logic (Browser limitation)
