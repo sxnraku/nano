@@ -1,8 +1,55 @@
+# Dependencies
 node_modules/
-build/
+.pnpm-store/
+
+# Build outputs
 dist/
+dist-ssr/
+build/
 coverage/
-.DS_Store
+.vite/
+
+# Logs & Temporary output files
 *.log
-.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+build_log.txt
+full_tsc_output.txt
+raw_tsc_output.txt
+signing_report.txt
+tsc_errors*.txt
+gemini_old.ts
+gemini_old_utf8.ts
+
+# Environment & Secrets
+.env
+.env.*
 !.env.example
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Capacitor & Native build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+ios/DerivedData/
+ios/App/Pods/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+
