@@ -27,68 +27,41 @@ O **Nano Verse** é uma aplicação RPG tática e colecionável para Web e dispo
 
 ## 📊 Diagramas de Arquitetura & Fluxos
 
-### 1. 🔄 Fluxo de Geração do Guerreiro (AI Scanner Engine)
+> Os diagramas abaixo são renderizados a partir de ficheiros HTML self-contained (SVG inline, sem build e sem JavaScript) em [`docs/diagrams/`](docs/diagrams/). Abra qualquer um deles diretamente no browser para ver a versão editorial completa.
 
-```mermaid
-flowchart TD
-    A[📸 Captura / Upload de Imagem] --> B[🔍 Cálculo de Hash Perceptual]
-    B -->|Verifica Duplicatas| C{É Imagem Única?}
-    C -->|Sim| D[🤖 Google Gemini AI API]
-    C -->|Não| E[⚠️ Alerta de Imagem Semelhante]
-    D --> F[✨ Análise Visual & Atributos]
-    F --> G[🖼️ Geração da Arte & Lore]
-    G --> H[💾 Salvamento Local & Cloud Sync]
-    H --> I[🎴 Guerreiro Adicionado ao Deck]
-```
+### 1. 🔄 Fluxo de Geração do Guerreiro (AI Scanner)
+
+![Pipeline do AI Scanner](docs/diagrams/01-scanner-pipeline.png)
+
+São **dois** pedidos distintos ao Gemini. Primeiro `gemini-2.5-flash` devolve os metadados em JSON — nome, classe, elemento, stats, raridade, lore e o `visualPrompt`. Só depois `gemini-2.5-flash-image` gera o retrato a partir desse prompt.
+
+O hash percetual **não bloqueia** a criação: se a distância de Hamming contra um scan anterior for `< 8`, o guerreiro nasce mesmo assim, mas com a *maldição de clone* — `stats × 0.8ⁿ` (onde `n` é o número de repetições do objeto) e o prefixo `[CLONE]` no nome.
+
+<sub>📄 [`01-scanner-pipeline.html`](docs/diagrams/01-scanner-pipeline.html) &nbsp;·&nbsp; 💻 [`src/App.tsx`](src/App.tsx), [`src/services/gemini.ts`](src/services/gemini.ts), [`src/utils/imageHash.ts`](src/utils/imageHash.ts)</sub>
 
 ---
 
-### 2. 🏛️ Arquitetura Geral do Sistema (System Architecture)
+### 2. 🏛️ Arquitetura Geral do Sistema
 
-```mermaid
-graph TB
-    subgraph Client Layer [Camada de Cliente]
-        App[React 19 + TypeScript SPA]
-        Cap[Capacitor 8 - Native Android/iOS]
-        Motion[Framer Motion & Tailwind v4]
-    end
+![Topologia do sistema](docs/diagrams/02-arquitetura-sistema.png)
 
-    subgraph AI & Engine Layer [Serviços de IA & Mídia]
-        Gemini[Google Gemini AI SDK @google/genai]
-        Howler[Howler.js Audio Engine]
-    end
+Não existe backend próprio. A SPA React é a espinha dorsal: à esquerda fala com os plugins nativos expostos pelo Capacitor e com o armazenamento local; à direita fala com serviços geridos. Tudo o que atravessa a rede está a ciano.
 
-    subgraph Cloud Layer [Backend & Serviços Cloud]
-        FB_Auth[Firebase Auth - Email/Anônimo]
-        FB_FS[Firestore - Matchmaking, Gangues & Leaderboard]
-        FB_Save[Cloud Save Sync & Persistência]
-        AdMob[Capacitor AdMob - Rewarded Video Ads]
-    end
+A persistência é dupla — a coleção completa (incluindo imagens base64) vive em **IndexedDB** (`NanoVerseDB v2`, fora da quota do `localStorage`), e o save é espelhado no campo `cloudSaveData` do documento `users/{uid}` no Firestore.
 
-    App --> Gemini
-    App --> FB_Auth
-    App --> FB_FS
-    App --> FB_Save
-    App --> Howler
-    Cap --> App
-    Cap --> AdMob
-```
+<sub>📄 [`02-arquitetura-sistema.html`](docs/diagrams/02-arquitetura-sistema.html) &nbsp;·&nbsp; 💻 [`src/services/firebase.ts`](src/services/firebase.ts), [`src/services/gemini.ts`](src/services/gemini.ts), [`src/services/storage.ts`](src/services/storage.ts)</sub>
 
 ---
 
-### 3. ⚔️ Sistema de Batalha (Battle Engine Topology)
+### 3. ⚔️ Sistema de Batalha
 
-```mermaid
-graph LR
-    Player[🎴 Deck do Jogador] --> Engine{⚔️ Battle Engine}
-    Engine --> PvE[🗡️ Clássico / Sobrevivência / Blitz]
-    Engine --> PvP[🌐 PvP em Tempo Real - Matchmaking]
-    Engine --> Raid[🐉 Raids Cooperativas Globais]
-    Engine --> GangWar[🛡️ Guerras de Gangue]
-    
-    Engine --> Logs[📜 Log Narrativo com IA]
-    Engine --> SFX[🎵 Efeitos Sonoros Howler]
-```
+![Motor de batalha](docs/diagrams/03-motor-de-batalha.png)
+
+Os seis modos (`classic`, `survival`, `blitz`, `boss`, `gang_war`, `pvp`) entram todos no mesmo componente e divergem apenas em **duas** coisas: a origem do adversário e a escala de dificuldade. A resolução de turno — elementos, combos e passivas — é partilhada por todos.
+
+O PvP é o único modo que não usa escala de stats: ambos os lados começam com 1000 HP fixos e o estado da sessão é sincronizado via listener `onSnapshot` na coleção `pvp_battles`.
+
+<sub>📄 [`03-motor-de-batalha.html`](docs/diagrams/03-motor-de-batalha.html) &nbsp;·&nbsp; 💻 [`src/components/BattleArena.tsx`](src/components/BattleArena.tsx), [`src/utils/elo.ts`](src/utils/elo.ts)</sub>
 
 ---
 
@@ -99,8 +72,9 @@ graph LR
 | **Frontend Framework** | React 19, TypeScript 5.8, Vite 6 |
 | **Estilização & Animações** | Tailwind CSS v4, Framer Motion (`motion/react`), Lucide React |
 | **Mobile Cross-Platform** | Capacitor 8 (Android & iOS), `@capacitor/camera`, `@capacitor-community/admob` |
-| **Inteligência Artificial** | Google Gemini AI (`@google/genai`) |
-| **Backend & Cloud Services** | Firebase (Authentication, Cloud Firestore, Realtime, Cloud Save) |
+| **Inteligência Artificial** | Google Gemini AI (`@google/genai`) — `gemini-2.5-flash` e `gemini-2.5-flash-image` |
+| **Backend & Cloud Services** | Firebase — Authentication (anónimo/email), Cloud Firestore (`users`, `guilds`, `challenges`, `pvp_battles`, `matchmaking`), sync em tempo real via `onSnapshot` |
+| **Persistência Local** | IndexedDB (`NanoVerseDB v2`) para coleção e ícones |
 | **Áudio & Mídia** | Howler.js, HTML2Canvas, QRCode.react |
 
 ---

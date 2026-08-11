@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nano Verse — Motor de Batalha</title>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Inter:wght@400;600;700;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-paper:   #0b0b0b;
+    --color-paper-2: #18181b;
+    --color-ink:     #f5f5f5;
+    --color-muted:   #a1a1aa;
+    --color-soft:    #71717a;
+    --color-rule:    rgba(245,245,245,0.14);
+    --color-accent:  #facc15;
+    --color-link:    #22d3ee;
+    --font-display:  'Permanent Marker', cursive;
+    --font-sans:     'Inter', system-ui, sans-serif;
+    --font-mono:     'Geist Mono', ui-monospace, monospace;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    padding: 3rem 1.5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 960px; margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    margin-bottom: 0.75rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.75rem;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+  }
+  .subtitle {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .diagram { margin-top: 2.5rem; overflow-x: auto; }
+  svg { width: 100%; height: auto; min-width: 660px; display: block; }
+  .colophon {
+    margin-top: 2.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-soft);
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Nano Verse · Combate</p>
+    <h1>Motor de Batalha — Seis Modos, Um Resolvedor</h1>
+    <p class="subtitle">Os seis modos entram todos no mesmo componente e divergem apenas na origem do adversário e na escala de dificuldade. A resolução de turno é partilhada; só a saída muda.</p>
+  </header>
+
+  <div class="diagram">
+    <svg viewBox="0 0 880 648" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Árvore de modos do motor de batalha">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#a1a1aa"/>
+        </marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#facc15"/>
+        </marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#22d3ee"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#0b0b0b"/>
+
+      <!-- ============ ARROWS (drawn before boxes) ============ -->
+      <path d="M388,120 V152 Q388,160 380,160 H160 Q152,160 152,168 V200" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M440,120 V200" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M492,120 V152 Q492,160 500,160 H720 Q728,160 728,168 V200" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+
+      <path d="M152,312 V336 Q152,344 160,344 H380 Q388,344 388,352 V376" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M440,312 V376" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M728,312 V336 Q728,344 720,344 H500 Q492,344 492,352 V376" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <path d="M388,440 V464 Q388,472 380,472 H240 Q232,472 232,480 V504" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M492,440 V464 Q492,472 500,472 H640 Q648,472 648,480 V504" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- ============ ARROW LABELS ============ -->
+      <rect x="242" y="140" width="56" height="12" fill="#0b0b0b"/>
+      <text x="270" y="149" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BOT LOCAL</text>
+
+      <rect x="448" y="172" width="52" height="12" fill="#0b0b0b"/>
+      <text x="474" y="181" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">GUILDA</text>
+
+      <rect x="580" y="140" width="60" height="12" fill="#0b0b0b"/>
+      <text x="610" y="149" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FIRESTORE</text>
+
+      <rect x="288" y="452" width="44" height="12" fill="#0b0b0b"/>
+      <text x="310" y="461" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TODOS</text>
+
+      <rect x="552" y="452" width="36" height="12" fill="#0b0b0b"/>
+      <text x="570" y="461" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PVP</text>
+
+      <!-- ============ RAIZ (FOCAL) ============ -->
+      <rect x="340" y="48" width="200" height="72" fill="#0b0b0b"/>
+      <rect x="340" y="48" width="200" height="72" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="2"/>
+      <rect x="348" y="56" width="48" height="12" fill="none" stroke="rgba(250,204,21,0.50)" stroke-width="1"/>
+      <text x="372" y="65" fill="#facc15" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ENGINE</text>
+      <text x="440" y="92" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Arena de Batalha</text>
+      <text x="440" y="108" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">BattleArena.tsx · 6 modos</text>
+
+      <!-- ============ RAMO 1 — PvE LOCAL ============ -->
+      <rect x="52" y="200" width="200" height="112" fill="#0b0b0b"/>
+      <rect x="52" y="200" width="200" height="112" fill="#18181b" stroke="#f5f5f5" stroke-width="2"/>
+      <rect x="60" y="208" width="36" height="12" fill="none" stroke="rgba(245,245,245,0.40)" stroke-width="1"/>
+      <text x="78" y="217" fill="#f5f5f5" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PVE</text>
+      <text x="152" y="244" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Solo &amp; Sobrevivência</text>
+      <text x="152" y="264" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">classic — oponente fixo</text>
+      <text x="152" y="280" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">survival — ondas ×1.25</text>
+      <text x="152" y="296" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">blitz — contra-relógio</text>
+
+      <!-- ============ RAMO 2 — COOPERATIVO ============ -->
+      <rect x="340" y="200" width="200" height="112" fill="#0b0b0b"/>
+      <rect x="340" y="200" width="200" height="112" fill="#18181b" stroke="#f5f5f5" stroke-width="2"/>
+      <rect x="348" y="208" width="52" height="12" fill="none" stroke="rgba(245,245,245,0.40)" stroke-width="1"/>
+      <text x="374" y="217" fill="#f5f5f5" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GANGUE</text>
+      <text x="440" y="244" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Cooperativo</text>
+      <text x="440" y="264" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">boss — raid, stats ×4</text>
+      <text x="440" y="280" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">gang_war — equipa vs equipa</text>
+      <text x="440" y="296" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">dano agregado à guilda</text>
+
+      <!-- ============ RAMO 3 — PvP ONLINE ============ -->
+      <rect x="628" y="200" width="200" height="112" fill="#0b0b0b"/>
+      <rect x="628" y="200" width="200" height="112" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="2"/>
+      <rect x="636" y="208" width="44" height="12" fill="none" stroke="rgba(245,245,245,0.30)" stroke-width="1"/>
+      <text x="658" y="217" fill="rgba(245,245,245,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ONLINE</text>
+      <text x="728" y="244" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">PvP em Tempo Real</text>
+      <text x="728" y="264" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">matchmaking por tier</text>
+      <text x="728" y="280" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pvp_battles · onSnapshot</text>
+      <text x="728" y="296" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">1000 HP fixo, sem escala</text>
+
+      <!-- ============ RESOLVEDOR (FOCAL) ============ -->
+      <rect x="340" y="376" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="340" y="376" width="200" height="64" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="2"/>
+      <rect x="348" y="384" width="44" height="12" fill="none" stroke="rgba(250,204,21,0.50)" stroke-width="1"/>
+      <text x="370" y="393" fill="#facc15" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TURNO</text>
+      <text x="440" y="416" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Resolução de Turno</text>
+      <text x="440" y="428" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">elementos · combos · passivas</text>
+
+      <!-- ============ SAÍDAS ============ -->
+      <rect x="112" y="504" width="240" height="64" fill="#0b0b0b"/>
+      <rect x="112" y="504" width="240" height="64" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="2"/>
+      <rect x="120" y="512" width="60" height="12" fill="none" stroke="rgba(161,161,170,0.50)" stroke-width="1"/>
+      <text x="150" y="521" fill="#a1a1aa" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROGRESSO</text>
+      <text x="232" y="544" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Sucata, XP &amp; Troféus</text>
+      <text x="232" y="556" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">checkAndUnlockTrophies()</text>
+
+      <rect x="528" y="504" width="240" height="64" fill="#0b0b0b"/>
+      <rect x="528" y="504" width="240" height="64" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="2"/>
+      <rect x="536" y="512" width="44" height="12" fill="none" stroke="rgba(161,161,170,0.50)" stroke-width="1"/>
+      <text x="558" y="521" fill="#a1a1aa" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RANK</text>
+      <text x="648" y="544" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">ELO &amp; Leaderboard</text>
+      <text x="648" y="556" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">users.elo · Bronze → Legend</text>
+
+      <!-- ============ LEGEND ============ -->
+      <line x1="52" y1="600" x2="828" y2="600" stroke="rgba(245,245,245,0.14)" stroke-width="1"/>
+      <text x="52" y="624" fill="#71717a" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGENDA</text>
+
+      <rect x="152" y="614" width="12" height="12" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="1.5"/>
+      <text x="172" y="624" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">LÓGICA PARTILHADA</text>
+
+      <rect x="360" y="614" width="12" height="12" fill="#18181b" stroke="#f5f5f5" stroke-width="1.5"/>
+      <text x="380" y="624" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">MODO LOCAL</text>
+
+      <rect x="524" y="614" width="12" height="12" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="1.5"/>
+      <text x="544" y="624" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">MODO EM REDE</text>
+
+      <rect x="692" y="614" width="12" height="12" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="1.5"/>
+      <text x="712" y="624" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">ESTADO PERSISTIDO</text>
+    </svg>
+  </div>
+
+  <footer class="colophon">Nano Verse · src/components/BattleArena.tsx · src/utils/elo.ts · src/services/firebase.ts</footer>
+</main>
+</body>
+</html>

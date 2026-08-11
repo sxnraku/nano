@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nano Verse — Arquitetura do Sistema</title>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Inter:wght@400;600;700;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-paper:   #0b0b0b;
+    --color-paper-2: #18181b;
+    --color-ink:     #f5f5f5;
+    --color-muted:   #a1a1aa;
+    --color-soft:    #71717a;
+    --color-rule:    rgba(245,245,245,0.14);
+    --color-accent:  #facc15;
+    --color-link:    #22d3ee;
+    --font-display:  'Permanent Marker', cursive;
+    --font-sans:     'Inter', system-ui, sans-serif;
+    --font-mono:     'Geist Mono', ui-monospace, monospace;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    padding: 3rem 1.5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 960px; margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    margin-bottom: 0.75rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.75rem;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+  }
+  .subtitle {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .diagram { margin-top: 2.5rem; overflow-x: auto; }
+  svg { width: 100%; height: auto; min-width: 660px; display: block; }
+  .colophon {
+    margin-top: 2.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-soft);
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Nano Verse · Arquitetura</p>
+    <h1>Topologia do Sistema</h1>
+    <p class="subtitle">Não há backend próprio. A SPA React é a espinha: fala com os plugins nativos do Capacitor à esquerda e com os serviços geridos à direita. Tudo o que atravessa a rede vai a ciano.</p>
+  </header>
+
+  <div class="diagram">
+    <svg viewBox="0 0 880 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de arquitetura do Nano Verse">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#a1a1aa"/>
+        </marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#facc15"/>
+        </marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#22d3ee"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#0b0b0b"/>
+
+      <!-- ============ ZONE EYEBROWS ============ -->
+      <text x="48" y="104" fill="#71717a" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">DISPOSITIVO · NATIVO</text>
+      <text x="344" y="104" fill="#71717a" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">APLICAÇÃO</text>
+      <text x="632" y="104" fill="#71717a" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">SERVIÇOS GERIDOS</text>
+
+      <!-- ============ ARROWS (drawn before boxes) ============ -->
+      <path d="M248,152 H344" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M344,248 H248" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+      <path d="M344,344 H248" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M344,440 H248" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <path d="M536,152 H632" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+      <path d="M536,248 H632" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+      <path d="M536,344 H632" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+
+      <!-- ============ ARROW LABELS ============ -->
+      <rect x="270" y="132" width="52" height="12" fill="#0b0b0b"/>
+      <text x="296" y="141" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WEBVIEW</text>
+
+      <rect x="270" y="228" width="52" height="12" fill="#0b0b0b"/>
+      <text x="296" y="237" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REWARD</text>
+
+      <rect x="278" y="324" width="36" height="12" fill="#0b0b0b"/>
+      <text x="296" y="333" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SFX</text>
+
+      <rect x="274" y="420" width="44" height="12" fill="#0b0b0b"/>
+      <text x="296" y="429" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CACHE</text>
+
+      <rect x="558" y="132" width="52" height="12" fill="#0b0b0b"/>
+      <text x="584" y="141" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT</text>
+
+      <rect x="562" y="228" width="44" height="12" fill="#0b0b0b"/>
+      <text x="584" y="237" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOKEN</text>
+
+      <rect x="562" y="324" width="44" height="12" fill="#0b0b0b"/>
+      <text x="584" y="333" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SYNC</text>
+
+      <!-- ============ NODES — COLUNA ESQUERDA ============ -->
+
+      <!-- Capacitor -->
+      <rect x="48" y="120" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="48" y="120" width="200" height="64" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="2"/>
+      <rect x="56" y="128" width="48" height="12" fill="none" stroke="rgba(245,245,245,0.30)" stroke-width="1"/>
+      <text x="80" y="137" fill="rgba(245,245,245,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NATIVO</text>
+      <text x="148" y="160" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Capacitor 8</text>
+      <text x="148" y="172" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">camera · haptics · fs</text>
+
+      <!-- AdMob -->
+      <rect x="48" y="216" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="48" y="216" width="200" height="64" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="2"/>
+      <rect x="56" y="224" width="36" height="12" fill="none" stroke="rgba(245,245,245,0.30)" stroke-width="1"/>
+      <text x="74" y="233" fill="rgba(245,245,245,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ADS</text>
+      <text x="148" y="256" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">AdMob</text>
+      <text x="148" y="268" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">rewarded video</text>
+
+      <!-- Howler -->
+      <rect x="48" y="312" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="48" y="312" width="200" height="64" fill="#18181b" stroke="#f5f5f5" stroke-width="2"/>
+      <rect x="56" y="320" width="44" height="12" fill="none" stroke="rgba(245,245,245,0.40)" stroke-width="1"/>
+      <text x="78" y="329" fill="#f5f5f5" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ÁUDIO</text>
+      <text x="148" y="352" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Howler.js</text>
+      <text x="148" y="364" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sfx · bgm · loops</text>
+
+      <!-- IndexedDB -->
+      <rect x="48" y="408" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="48" y="408" width="200" height="64" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="2"/>
+      <rect x="56" y="416" width="44" height="12" fill="none" stroke="rgba(161,161,170,0.50)" stroke-width="1"/>
+      <text x="78" y="425" fill="#a1a1aa" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LOCAL</text>
+      <text x="148" y="448" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">IndexedDB</text>
+      <text x="148" y="460" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">NanoVerseDB v2</text>
+
+      <!-- ============ ESPINHA — REACT SPA (FOCAL) ============ -->
+      <rect x="344" y="120" width="192" height="352" fill="#0b0b0b"/>
+      <rect x="344" y="120" width="192" height="352" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="2"/>
+      <rect x="352" y="128" width="36" height="12" fill="none" stroke="rgba(250,204,21,0.50)" stroke-width="1"/>
+      <text x="370" y="137" fill="#facc15" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">APP</text>
+      <text x="440" y="288" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">React 19 SPA</text>
+      <text x="440" y="304" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">vite 6 · typescript 5.8</text>
+      <text x="440" y="316" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tailwind v4 · motion</text>
+
+      <!-- ============ NODES — COLUNA DIREITA ============ -->
+
+      <!-- Gemini (FOCAL) -->
+      <rect x="632" y="120" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="632" y="120" width="200" height="64" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="2"/>
+      <rect x="640" y="128" width="28" height="12" fill="none" stroke="rgba(250,204,21,0.50)" stroke-width="1"/>
+      <text x="654" y="137" fill="#facc15" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IA</text>
+      <text x="732" y="160" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Google Gemini</text>
+      <text x="732" y="172" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">2.5-flash · flash-image</text>
+
+      <!-- Firebase Auth -->
+      <rect x="632" y="216" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="632" y="216" width="200" height="64" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="2"/>
+      <rect x="640" y="224" width="40" height="12" fill="none" stroke="rgba(245,245,245,0.30)" stroke-width="1"/>
+      <text x="660" y="233" fill="rgba(245,245,245,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AUTH</text>
+      <text x="732" y="256" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Firebase Auth</text>
+      <text x="732" y="268" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">anónimo · email</text>
+
+      <!-- Firestore -->
+      <rect x="632" y="312" width="200" height="64" fill="#0b0b0b"/>
+      <rect x="632" y="312" width="200" height="64" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="2"/>
+      <rect x="640" y="320" width="28" height="12" fill="none" stroke="rgba(161,161,170,0.50)" stroke-width="1"/>
+      <text x="654" y="329" fill="#a1a1aa" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="732" y="352" fill="#f5f5f5" font-size="12" font-weight="700" font-family="'Inter', sans-serif" text-anchor="middle">Cloud Firestore</text>
+      <text x="732" y="364" fill="#a1a1aa" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">users · guilds · pvp_battles</text>
+
+      <!-- ============ LEGEND ============ -->
+      <line x1="48" y1="520" x2="832" y2="520" stroke="rgba(245,245,245,0.14)" stroke-width="1"/>
+      <text x="48" y="548" fill="#71717a" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGENDA</text>
+
+      <rect x="152" y="538" width="12" height="12" fill="rgba(250,204,21,0.10)" stroke="#facc15" stroke-width="1.5"/>
+      <text x="172" y="548" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">NÚCLEO</text>
+
+      <rect x="300" y="538" width="12" height="12" fill="rgba(245,245,245,0.05)" stroke="#a1a1aa" stroke-width="1.5"/>
+      <text x="320" y="548" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">ARMAZENAMENTO</text>
+
+      <rect x="504" y="538" width="12" height="12" fill="rgba(245,245,245,0.03)" stroke="rgba(245,245,245,0.30)" stroke-width="1.5"/>
+      <text x="524" y="548" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">SERVIÇO EXTERNO</text>
+
+      <path d="M700,544 H728" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-link)"/>
+      <text x="740" y="548" fill="#a1a1aa" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">CHAMADA DE REDE</text>
+    </svg>
+  </div>
+
+  <footer class="colophon">Nano Verse · src/services/firebase.ts · src/services/gemini.ts · src/services/storage.ts</footer>
+</main>
+</body>
+</html>
