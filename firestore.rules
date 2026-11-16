@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Helper Functions
+    // Helpers
     // ===============================================================
 
     function isAuthenticated() {
@@ -14,108 +14,286 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    function newData() {
+      return request.resource.data;
     }
 
-    function uidUnchanged() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    function uidNotModified() {
-      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    // Numeric change of a field between the stored and the incoming doc.
+    function delta(field, dflt) {
+      return newData().get(field, dflt) - resource.data.get(field, dflt);
     }
 
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-    
     function isValidStringLength(field, minLen, maxLen) {
-      return request.resource.data[field] is string &&
-        request.resource.data[field].size() >= minLen &&
-        request.resource.data[field].size() <= maxLen;
+      return newData()[field] is string &&
+        newData()[field].size() >= minLen &&
+        newData()[field].size() <= maxLen;
     }
 
-    function isValidNumber(field) {
-      return request.resource.data[field] is number;
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isValidTimestamp(field) {
-      return request.resource.data[field] is timestamp;
+    function guildDoc(guildId) {
+      return get(/databases/$(database)/documents/guilds/$(guildId)).data;
+    }
+
+    function isGuildMember(guildId) {
+      return isAuthenticated() && me().get('guildId', null) == guildId;
     }
 
     // ===============================================================
-    // Domain Validators
+    // Users
     // ===============================================================
 
     function isValidUser() {
-      return hasRequiredFields(['uid', 'displayName', 'totalWins', 'collectionSize']) &&
+      return newData().keys().hasAll(['uid', 'displayName', 'totalWins', 'collectionSize']) &&
              isValidStringLength('displayName', 1, 50) &&
-             isValidNumber('totalWins') &&
-             isValidNumber('collectionSize') &&
-             (!('highestCombo' in request.resource.data) || isValidNumber('highestCombo')) &&
-             (!('photoURL' in request.resource.data) || isValidStringLength('photoURL', 0, 500)) &&
-             (!('guildId' in request.resource.data) || request.resource.data.guildId == null || request.resource.data.guildId is string);
+             newData().totalWins is number &&
+             newData().collectionSize is number &&
+             (!('highestCombo' in newData()) || newData().highestCombo is number) &&
+             (!('photoURL' in newData()) || isValidStringLength('photoURL', 0, 500)) &&
+             (!('guildId' in newData()) || newData().guildId == null || newData().guildId is string) &&
+             (!('trophies' in newData()) || newData().trophies is list) &&
+             (!('friends' in newData()) || newData().friends is list) &&
+             (!('cloudSaveData' in newData()) || isValidStringLength('cloudSaveData', 0, 900000));
     }
 
-    function isValidChallenge() {
-      return hasRequiredFields(['creatorId', 'warriorData', 'createdAt']) &&
-             request.resource.data.creatorId == request.auth.uid &&
-             isValidStringLength('warriorData', 1, 100000) &&
-             isValidTimestamp('createdAt');
+    // A new profile starts from zero: no free wins, levels, ELO or trophies.
+    function isFreshUser(userId) {
+      return newData().uid == userId &&
+             newData().totalWins == 0 &&
+             newData().get('level', 1) == 1 &&
+             newData().get('elo', 1000) == 1000 &&
+             newData().get('scrap', 0) == 0 &&
+             newData().get('trophies', []).size() == 0 &&
+             newData().get('guildId', null) == null;
     }
 
-    function isValidGuild() {
-      return hasRequiredFields(['name', 'leaderId', 'members', 'totalTrophies']) &&
-             isValidStringLength('name', 3, 30) &&
-             isValidNumber('members') &&
-             isValidNumber('totalTrophies');
+    // Leaderboard-facing stats can only move by plausible steps per write.
+    function hasPlausibleProgress() {
+      return delta('totalWins', 0) <= 1 &&
+             delta('elo', 1000) >= -60 && delta('elo', 1000) <= 60 &&
+             newData().get('elo', 1000) >= 0 &&
+             // Trophies are append-only, a few at a time.
+             newData().get('trophies', []).hasAll(resource.data.get('trophies', [])) &&
+             newData().get('trophies', []).size() - resource.data.get('trophies', []).size() <= 20;
     }
 
-    // ===============================================================
-    // Collection Rules
-    // ===============================================================
+    // Guild membership a player may set on their own profile.
+    function hasValidOwnGuildFields() {
+      return !changedKeys().hasAny(['guildId', 'guildRole']) ||
+        (
+          // Leaving: both cleared.
+          (newData().get('guildId', null) == null && newData().get('guildRole', null) == null) ||
+          // Joining an existing guild as a member.
+          (newData().guildId is string &&
+           exists(/databases/$(database)/documents/guilds/$(newData().guildId)) &&
+           newData().get('guildRole', null) == 'member' &&
+           resource.data.get('guildId', null) != newData().guildId) ||
+          // Being the leader of the guild (created it, or leadership was transferred).
+          (newData().guildId is string &&
+           newData().get('guildRole', null) == 'leader' &&
+           guildDoc(newData().guildId).leaderId == request.auth.uid) ||
+          // An ex-leader stepping down to co-leader in the same guild.
+          (newData().get('guildId', null) == resource.data.get('guildId', null) &&
+           resource.data.get('guildRole', null) == 'leader' &&
+           newData().get('guildRole', null) == 'coleader')
+        );
+    }
+
+    // Another player adds only themselves to my friends list.
+    function isFriendAdd() {
+      return changedKeys().hasOnly(['friends']) &&
+             newData().friends.toSet().difference(resource.data.get('friends', []).toSet()) == [request.auth.uid].toSet() &&
+             resource.data.get('friends', []).toSet().difference(newData().friends.toSet()).size() == 0;
+    }
+
+    // A guild leader / co-leader changes another member's role or kicks them.
+    function isGuildManagement() {
+      let target = resource.data;
+      let actor = me();
+      return changedKeys().hasOnly(['guildId', 'guildRole', 'lastActive']) &&
+             target.get('guildId', null) != null &&
+             actor.get('guildId', null) == target.guildId &&
+             actor.get('guildRole', null) in ['leader', 'coleader'] &&
+             (
+               // Kick
+               (newData().get('guildId', null) == null && newData().get('guildRole', null) == null &&
+                target.get('guildRole', null) != 'leader') ||
+               // Promote to co-leader
+               (newData().guildId == target.guildId && newData().guildRole == 'coleader') ||
+               // Hand over leadership (leader only)
+               (newData().guildId == target.guildId && newData().guildRole == 'leader' &&
+                actor.guildRole == 'leader')
+             );
+    }
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidUser();
-      // Relaxed update slightly to allow claiming quests and joining guilds (assuming trusting client for MVP quests)
-      allow update: if isOwner(userId) && isValidUser() && uidNotModified() && 
-                    (request.resource.data.totalWins <= resource.data.totalWins + 1);
+      allow create: if isOwner(userId) && isValidUser() && isFreshUser(userId);
+      allow update: if isOwner(userId) && isValidUser() &&
+                    newData().uid == resource.data.uid &&
+                    hasPlausibleProgress() &&
+                    hasValidOwnGuildFields();
+      allow update: if isAuthenticated() && !isOwner(userId) &&
+                    (isFriendAdd() || isGuildManagement());
       allow delete: if false;
+    }
+
+    // ===============================================================
+    // Guilds
+    // ===============================================================
+
+    function isValidGuild() {
+      return newData().keys().hasAll(['name', 'leaderId', 'members', 'totalTrophies']) &&
+             isValidStringLength('name', 3, 30) &&
+             newData().members is number && newData().members >= 0 &&
+             newData().totalTrophies is number;
+    }
+
+    function isGuildLeader(guildId) {
+      return isAuthenticated() && resource.data.leaderId == request.auth.uid;
+    }
+
+    // Raid boss: damage only lowers HP; a new boss only after the last one died.
+    function isValidRaidChange() {
+      let before = resource.data.get('raidBoss', null);
+      let after = newData().get('raidBoss', null);
+      return !changedKeys().hasAny(['raidBoss']) ||
+        (after != null && (
+          (before != null && after.maxHp == before.maxHp && after.level == before.level &&
+           after.hp < before.hp && before.hp - after.hp <= 100000) ||
+          ((before == null || before.hp <= 0) &&
+           after.level is int && after.level >= 1 && after.level <= 100 &&
+           after.hp == 10000 * after.level && after.maxHp == after.hp)
+        ));
+    }
+
+    function isValidGuildProgress() {
+      return newData().get('level', 1) >= resource.data.get('level', 1) &&
+             newData().get('level', 1) - resource.data.get('level', 1) <= 5 &&
+             newData().get('totalTrophies', 0) >= resource.data.get('totalTrophies', 0) &&
+             newData().get('totalTrophies', 0) - resource.data.get('totalTrophies', 0) <= 100;
     }
 
     match /guilds/{guildId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidGuild() && request.resource.data.leaderId == request.auth.uid;
-      // Allow joining/increasing members and adding trophies
-      allow update: if isAuthenticated() && isValidGuild() && 
-                    (request.resource.data.members <= resource.data.members + 1) &&
-                    (request.resource.data.totalTrophies >= resource.data.totalTrophies);
-      allow delete: if isAuthenticated() && resource.data.leaderId == request.auth.uid;
+
+      allow create: if isAuthenticated() && isValidGuild() &&
+                    newData().leaderId == request.auth.uid &&
+                    newData().members == 1 &&
+                    newData().totalTrophies == 0 &&
+                    newData().get('level', 1) == 1 &&
+                    newData().get('xp', 0) == 0;
+
+      // Anyone may join (+1); members leave (-1); the leader can kick (-1).
+      allow update: if isAuthenticated() && isValidGuild() &&
+                    changedKeys().hasOnly(['members']) &&
+                    (delta('members', 0) == 1 ||
+                     (delta('members', 0) == -1 && (isGuildMember(guildId) || isGuildLeader(guildId))));
+
+      // Members progress the guild: XP, level, raid boss, trophies.
+      allow update: if isGuildMember(guildId) && isValidGuild() &&
+                    changedKeys().hasOnly(['xp', 'level', 'xpToNextLevel', 'raidBoss', 'totalTrophies']) &&
+                    isValidGuildProgress() &&
+                    isValidRaidChange();
+
+      // Only the leader renames the guild or hands over leadership.
+      allow update: if isGuildLeader(guildId) && isValidGuild() &&
+                    changedKeys().hasOnly(['name', 'leaderId', 'leaderName', 'members']) &&
+                    delta('members', 0) <= 0 && delta('members', 0) >= -1;
+
+      allow delete: if isGuildLeader(guildId);
+
+      match /messages/{messageId} {
+        allow read: if isGuildMember(guildId);
+        allow create: if isGuildMember(guildId) &&
+                      isValidStringLength('content', 1, 500) &&
+                      (newData().senderId == request.auth.uid ||
+                       (newData().senderId == 'system' && newData().get('type', '') == 'system'));
+        allow update, delete: if false;
+      }
+    }
+
+    // ===============================================================
+    // Challenges (shareable warrior duels)
+    // ===============================================================
+
+    function isValidChallenge() {
+      return newData().keys().hasAll(['creatorId', 'warriorData', 'createdAt']) &&
+             isValidStringLength('warriorData', 1, 100000) &&
+             newData().createdAt is timestamp;
     }
 
     match /challenges/{challengeId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidChallenge();
-      allow update: if isAuthenticated() && 
-                    request.resource.data.creatorId == resource.data.creatorId && 
-                    request.resource.data.warriorData == resource.data.warriorData &&
-                    request.resource.data.createdAt == resource.data.createdAt &&
-                    (request.resource.data.wins <= resource.data.wins + 1) &&
-                    (request.resource.data.losses <= resource.data.losses + 1) &&
-                    isValidChallenge();
+      allow create: if isAuthenticated() && isValidChallenge() &&
+                    newData().creatorId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidChallenge() &&
+                    changedKeys().hasOnly(['wins', 'losses']) &&
+                    delta('wins', 0) >= 0 && delta('wins', 0) <= 1 &&
+                    delta('losses', 0) >= 0 && delta('losses', 0) <= 1;
       allow delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
     }
 
-    match /matchmaking/{id} {
-      allow read, update, delete: if isAuthenticated();
-      allow create: if isAuthenticated();
+    // ===============================================================
+    // Matchmaking queue
+    // ===============================================================
+
+    match /matchmaking/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && newData().uid == request.auth.uid &&
+                    newData().get('matchFound', null) == null;
+      // Another player claims this entry by pointing it at a battle where
+      // they are the guest and the entry's owner is the host.
+      allow update: if isAuthenticated() &&
+                    changedKeys().hasOnly(['matchFound']) &&
+                    resource.data.get('matchFound', null) == null &&
+                    newData().matchFound is string &&
+                    get(/databases/$(database)/documents/pvp_battles/$(newData().matchFound)).data.guestId == request.auth.uid &&
+                    get(/databases/$(database)/documents/pvp_battles/$(newData().matchFound)).data.hostId == resource.data.uid;
+      // Owner cancels; anyone may sweep entries older than 10 minutes.
+      allow delete: if isAuthenticated() &&
+                    (resource.data.uid == request.auth.uid ||
+                     resource.data.timestamp < request.time - duration.value(10, 'm'));
     }
-    
-    match /pvp_battles/{id} {
-      allow read, update, delete: if isAuthenticated();
-      allow create: if isAuthenticated();
+
+    // ===============================================================
+    // PvP battles
+    // ===============================================================
+
+    function isParticipant() {
+      return isAuthenticated() &&
+             (resource.data.hostId == request.auth.uid ||
+              resource.data.get('guestId', null) == request.auth.uid);
+    }
+
+    match /pvp_battles/{battleId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    (newData().hostId == request.auth.uid ||
+                     newData().get('guestId', null) == request.auth.uid);
+      // Join an open lobby as the guest.
+      allow update: if isAuthenticated() &&
+                    resource.data.status == 'waiting' &&
+                    resource.data.get('guestId', null) == null &&
+                    resource.data.hostId != request.auth.uid &&
+                    newData().guestId == request.auth.uid &&
+                    newData().hostId == resource.data.hostId &&
+                    newData().hostWarrior == resource.data.hostWarrior;
+      // During the battle only the two players write, and nobody swaps identities or warriors.
+      allow update: if isParticipant() &&
+                    newData().hostId == resource.data.hostId &&
+                    newData().get('guestId', null) == resource.data.get('guestId', null) &&
+                    newData().get('hostWarrior', null) == resource.data.get('hostWarrior', null) &&
+                    newData().get('guestWarrior', null) == resource.data.get('guestWarrior', null);
+      // Players delete their battle; anyone may sweep battles idle for 30 minutes.
+      allow delete: if isParticipant() ||
+                    (isAuthenticated() && resource.data.lastUpdate < request.time - duration.value(30, 'm'));
     }
   }
 }
