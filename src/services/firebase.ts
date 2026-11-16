@@ -502,28 +502,30 @@ export const promoteMember = async (targetUid: string, guildId: string, currentR
   try {
     const newRole = currentRole === 'member' ? 'coleader' : 'leader';
     const userRef = doc(db, 'users', targetUid);
-    
+
+    // Order matters for the security rules: the target's role is changed while
+    // the caller is still the leader, then the guild, then the caller steps down.
+    await updateDoc(userRef, { guildRole: newRole });
+
     if (newRole === 'leader') {
-      // Transfer leadership
       const guildRef = doc(db, 'guilds', guildId);
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data() as UserProfile;
-      
+
       const guildSnap = await getDoc(guildRef);
       const oldLeaderId = guildSnap.data()?.leaderId;
-      
+
       await updateDoc(guildRef, {
         leaderId: targetUid,
         leaderName: userData.displayName
       });
-      
-      // Downgrade old leader
+
+      // Downgrade old leader (the caller)
       if (oldLeaderId) {
         await updateDoc(doc(db, 'users', oldLeaderId), { guildRole: 'coleader' });
       }
     }
-    
-    await updateDoc(userRef, { guildRole: newRole });
+
     return true;
   } catch (error) {
     console.error("Error promoting member:", error);
