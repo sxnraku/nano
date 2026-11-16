@@ -1,10 +1,26 @@
-import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
+import { getAI, getGenerativeModel, GoogleAIBackend, ResponseModality } from "firebase/ai";
+import { app } from "./firebase";
 import { ImageManager } from "./ImageManager";
 import { generateId } from "./utils";
 
-// Initialize the client with the default environment key
-// This allows using the free tier key injected by AI Studio
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Gemini is called through Firebase AI Logic (Gemini Developer API backend).
+// The API key is held by Firebase on the server side, so it is never shipped
+// inside the app bundle. Per-user rate limits are configured in the Firebase
+// console (AI Logic > Settings); App Check can be enforced there too.
+const ai = getAI(app, { backend: new GoogleAIBackend() });
+
+// gemini-2.5-flash is no longer offered to new AI Logic projects.
+const textModel = getGenerativeModel(ai, {
+  model: "gemini-3.5-flash",
+  generationConfig: { responseMimeType: "application/json" },
+});
+
+// Image models have no free-tier quota: on the Spark plan this returns 429 and
+// generateWarriorImage falls back to Pollinations.
+const imageModel = getGenerativeModel(ai, {
+  model: "gemini-2.5-flash-image",
+  generationConfig: { responseModalities: [ResponseModality.TEXT, ResponseModality.IMAGE] },
+});
 
 export interface WarriorStats {
   hp: number;
@@ -85,13 +101,7 @@ export function assignPassive(warriorClass: string, element: string): PassiveAbi
   return PASSIVES.PRECISION;
 }
 
-/**
- * Analyzes an image and generates warrior metadata.
- */
-export async function analyzeAndCreateWarrior(base64Image: string): Promise<WarriorData> {
-  const model = "gemini-2.5-flash"; // Using Flash for fast text/json generation
-
-  const prompt = `
+const SCAN_PROMPT = `
     Analise esta imagem. Identifique o objeto principal, sua cor, material e utilidade.
     IMPORTANTE: Analise também a POSE e a EXPRESSÃO (ex: língua para fora, braços cruzados, sorrindo) do sujeito/objeto na foto.
 
@@ -128,43 +138,84 @@ export async function analyzeAndCreateWarrior(base64Image: string): Promise<Warr
     }
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
+type AIMetadata = Omit<WarriorData, 'id' | 'imageUrl' | 'passive'> & { error?: string };
 
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-    
-    // Clean up markdown code blocks if present
-    const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
-    const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'> & { error?: string };
-    
-    if (data.error === "unsafe") {
-      throw new Error("UNSAFE_CONTENT");
-    }
-    
-    // Assign passive based on class/element
-    const passive = assignPassive(data.class, data.element);
+/** Maps SDK errors to the error codes the UI already understands. */
+function mapAIError(error: unknown): Error {
+  const msg = String((error as Error)?.message ?? error);
+  if (msg === 'UNSAFE_CONTENT') return new Error('UNSAFE_CONTENT');
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return new Error('AI_QUOTA_EXCEEDED');
+  return error instanceof Error ? error : new Error(msg);
+}
+
+function parseJson(text: string): AIMetadata {
+  if (!text) throw new Error("No response from AI");
+  return JSON.parse(text.replace(/```json\n?|\n?```/g, "").trim());
+}
+
+const RARITIES: WarriorData['rarity'][] = ['Common', 'Rare', 'Epic', 'Legendary'];
+/** Upper bound for hp+atk+def+spd of a freshly scanned warrior, per rarity. */
+const SCAN_STAT_CAP: Record<WarriorData['rarity'], number> = { Common: 230, Rare: 290, Epic: 350, Legendary: 440 };
+const clip = (v: unknown, max: number) => String(v ?? '').slice(0, max);
+
+/**
+ * Normalises what the model returned so a misbehaving model (or a prompt
+ * injection in a fused warrior's text) can't mint absurd stats or rarities.
+ */
+export function sanitizeWarrior(raw: AIMetadata, opts: { fusion?: boolean; premium?: boolean } = {}): AIMetadata {
+  if (!raw || typeof raw !== 'object' || !raw.stats) throw new Error("AI response missing warrior fields");
+  let rarity = RARITIES.includes(raw.rarity) ? raw.rarity : 'Common';
+  if (opts.premium && RARITIES.indexOf(rarity) < RARITIES.indexOf('Epic')) rarity = 'Epic';
+
+  const num = (v: unknown) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), 400) : 50;
+  };
+  const stats = { hp: num(raw.stats.hp), atk: num(raw.stats.atk), def: num(raw.stats.def), spd: num(raw.stats.spd) };
+  const cap = Math.round(SCAN_STAT_CAP[rarity] * (opts.premium ? 1.45 : opts.fusion ? 1.25 : 1));
+  const total = stats.hp + stats.atk + stats.def + stats.spd;
+  if (total > cap) {
+    const k = cap / total;
+    stats.hp = Math.max(1, Math.floor(stats.hp * k));
+    stats.atk = Math.max(1, Math.floor(stats.atk * k));
+    stats.def = Math.max(1, Math.floor(stats.def * k));
+    stats.spd = Math.max(1, Math.floor(stats.spd * k));
+  }
+
+  return {
+    name: clip(raw.name, 60) || 'Nano Warrior',
+    class: clip(raw.class, 80) || 'Guerreiro',
+    element: clip(raw.element, 40) || 'Neutro',
+    rarity,
+    description: clip(raw.description, 800),
+    visualPrompt: clip(raw.visualPrompt, 2000),
+    originalObject: clip(raw.originalObject, 80),
+    stats,
+  };
+}
+
+/**
+ * Analyzes an image and generates warrior metadata.
+ */
+export async function analyzeAndCreateWarrior(base64Image: string): Promise<WarriorData> {
+  try {
+    const result = await textModel.generateContent([
+      { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+      { text: SCAN_PROMPT },
+    ]);
+    const raw = parseJson(result.response.text());
+    if (raw.error === "unsafe") throw new Error("UNSAFE_CONTENT");
+    const data = sanitizeWarrior(raw);
 
     return {
       ...data,
       id: generateId(),
-      passive,
+      passive: assignPassive(data.class, data.element),
       originalObject: data.originalObject || "Scan Object"
     };
   } catch (error) {
     console.error("Error analyzing image:", error);
-    throw error;
+    throw mapAIError(error);
   }
 }
 
@@ -174,9 +225,6 @@ export type WarriorStyle = 'Default' | 'Glitch' | 'Neon' | 'Cyber' | 'Dark' | 'R
  * Generates the visual avatar for the warrior.
  */
 export async function generateWarriorImage(visualPrompt: string, base64Image?: string, style: WarriorStyle = 'Default'): Promise<string> {
-  // Switched to gemini-2.5-flash-image (Nano Banana) which supports free tier keys
-  const model = "gemini-2.5-flash-image"; 
-
   let stylePrompt = "";
   switch(style) {
     case 'Glitch': stylePrompt = "Estilo GLITCH ART, distorção digital, datamosh, falhas visuais, cores RGB separadas, ruído estático."; break;
@@ -190,46 +238,25 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
   try {
     const enhancedPrompt = `[CRITICAL: DO NOT GENERATE PHOTOREALISM. MUST BE A 2D ILLUSTRATION ONLY] Transforme a foto original completamente num DESENHO. ${visualPrompt} ${stylePrompt} Cores vibrantes e saturadas de banda desenhada/anime. Desenhe o formato em estilo Cartoon 2D, substituindo texturas reais por tinta lisa. A imagem deve manter a forma mas parecer desenhada à mão!`;
 
-    const parts: any[] = [{ text: enhancedPrompt }];
-    
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: enhancedPrompt }];
     // If we have the original image, use it as a reference for the pose/structure
     if (base64Image) {
       parts.unshift({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
     }
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: parts
-      },
-      config: {
-        // responseMimeType is not supported for image generation models in this SDK version usually,
-        // but we just need the image output.
-      }
-    });
+    const result = await imageModel.generateContent(parts);
+    const image = result.response.inlineDataParts()?.find(p => p.inlineData?.data);
+    if (!image) throw new Error("No image data found in response");
 
-    // Extract image
-    // The response structure for image generation usually contains inlineData in the parts
-    const responseParts = response.candidates?.[0]?.content?.parts;
-    if (!responseParts) throw new Error("No image generated");
-
-    for (const part of responseParts) {
-      if (part.inlineData && part.inlineData.data) {
-        const fullBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-        // Use centralized ImageManager for optimization
-        try {
-          return await ImageManager.optimizeForStorage(fullBase64);
-        } catch (e) {
-          console.warn("Optimization failed, returning original", e);
-          return fullBase64;
-        }
-      }
+    const fullBase64 = `data:${image.inlineData.mimeType || 'image/png'};base64,${image.inlineData.data}`;
+    try {
+      return await ImageManager.optimizeForStorage(fullBase64);
+    } catch (e) {
+      console.warn("Optimization failed, returning original", e);
+      return fullBase64;
     }
-    
-    throw new Error("No image data found in response");
   } catch (error) {
     console.error("Error generating warrior image:", error);
-    // Log the error for debugging
     console.warn("Gemini Image generation failed, falling back to Pollinations for stability");
     const seed = Math.floor(Math.random() * 999999);
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(visualPrompt + " manga punk graffiti urban")}.png?width=512&height=512&nologo=true&seed=${seed}`;
@@ -237,8 +264,6 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
 }
 
 export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: boolean = false): Promise<WarriorData> {
-  const model = "gemini-2.5-flash";
-  
   const prompt = `
     FUSÃO DE GUERREIROS:
     Guerreiro 1: ${w1.name} (${w1.class}, ${w1.element}). Descrição: ${w1.description}. Visual: ${w1.visualPrompt}
@@ -268,33 +293,17 @@ export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: 
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: [{ text: prompt }]
-      },
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-    
-    const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
-    const data = JSON.parse(cleanText) as Omit<WarriorData, 'id' | 'imageUrl' | 'passive'>;
-    
-    // Assign passive based on class/element
-    const passive = assignPassive(data.class, data.element);
+    const result = await textModel.generateContent(prompt);
+    const data = sanitizeWarrior(parseJson(result.response.text()), { fusion: true, premium: isPremium });
 
     return {
       ...data,
       id: generateId(),
       originalObject: `Fusão: ${w1.name} + ${w2.name}`,
-      passive
+      passive: assignPassive(data.class, data.element)
     };
   } catch (error) {
     console.error("Error fusing warriors:", error);
-    throw error;
+    throw mapAIError(error);
   }
 }

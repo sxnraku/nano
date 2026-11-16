@@ -38,12 +38,14 @@ import {
 export { Timestamp, increment, serverTimestamp };
 import type { WarriorData } from './gemini';
 import { compressImage } from './imageUtils';
+import { initAppCheck } from './appCheck';
 
 // Import the Firebase configuration
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase SDK
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
+void initAppCheck(app);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 

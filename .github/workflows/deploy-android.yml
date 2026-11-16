@@ -27,9 +27,8 @@ jobs:
 
       - name: Build Web App
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          API_KEY: ${{ secrets.API_KEY }}
-          LEONARDO_API_KEY: ${{ secrets.LEONARDO_API_KEY }}
+          # Tester builds use the App Check debug provider (see src/services/appCheck.ts).
+          VITE_APPCHECK_DEBUG_TOKEN: ${{ secrets.APPCHECK_DEBUG_TOKEN }}
         run: npm run build
 
       - name: Capacitor Sync

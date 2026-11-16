@@ -328,6 +328,7 @@ export interface Translation {
     toast_energy_depleted: string;
     toast_warrior_materialized: string;
     toast_gen_failed: string;
+    toast_ai_quota_exceeded: string;
     confirm_overwrite: string;
     // Additional Keys
     battle_burn_status: string;
@@ -669,6 +670,7 @@ export const translations: Record<Language, Translation> = {
         toast_energy_depleted: 'Scanner Energy Depleted! Buy capsules or wait until tomorrow.',
         toast_warrior_materialized: 'Warrior materialized! +{scrap} Scrap | +{xp} XP',
         toast_gen_failed: 'Failed to generate warrior. Try again.',
+        toast_ai_quota_exceeded: 'Daily AI limit reached. Come back tomorrow!',
         confirm_overwrite: 'This will OVERWRITE your local data (Warriors and Levels). Are you sure?',
         battle_burn_status: 'BURN',
         battle_time_bonus: '+5s',
@@ -1007,6 +1009,7 @@ export const translations: Record<Language, Translation> = {
         toast_energy_depleted: 'Energia do Scanner Esgotada! Compra cápsulas ou aguarda até amanhã.',
         toast_warrior_materialized: 'Guerreiro materializado! +{scrap} Sucata | +{xp} XP',
         toast_gen_failed: 'Falha ao gerar guerreiro. Tenta novamente.',
+        toast_ai_quota_exceeded: 'Limite diário de IA atingido. Volta amanhã!',
         confirm_overwrite: 'Isto irá SOBREPOR os teus dados locais. Tens a certeza?',
         battle_burn_status: 'ARDE',
         battle_time_bonus: '+5s',

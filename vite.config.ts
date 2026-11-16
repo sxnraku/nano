@@ -13,11 +13,6 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
     },
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || process.env.API_KEY || ''),
-      'process.env.LEONARDO_API_KEY': JSON.stringify(env.LEONARDO_API_KEY || process.env.LEONARDO_API_KEY || ''),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
