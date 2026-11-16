@@ -26,6 +26,9 @@ jobs:
         run: npm install
 
       - name: Build Web App
+        env:
+          # Tester builds use the App Check debug provider (see src/services/appCheck.ts).
+          VITE_APPCHECK_DEBUG_TOKEN: ${{ secrets.APPCHECK_DEBUG_TOKEN }}
         run: npm run build
 
       - name: Capacitor Sync

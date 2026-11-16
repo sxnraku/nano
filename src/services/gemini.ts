@@ -9,11 +9,14 @@ import { generateId } from "./utils";
 // console (AI Logic > Settings); App Check can be enforced there too.
 const ai = getAI(app, { backend: new GoogleAIBackend() });
 
+// gemini-2.5-flash is no longer offered to new AI Logic projects.
 const textModel = getGenerativeModel(ai, {
-  model: "gemini-2.5-flash",
+  model: "gemini-3.5-flash",
   generationConfig: { responseMimeType: "application/json" },
 });
 
+// Image models have no free-tier quota: on the Spark plan this returns 429 and
+// generateWarriorImage falls back to Pollinations.
 const imageModel = getGenerativeModel(ai, {
   model: "gemini-2.5-flash-image",
   generationConfig: { responseModalities: [ResponseModality.TEXT, ResponseModality.IMAGE] },
