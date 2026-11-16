@@ -1,10 +1,23 @@
-import { httpsCallable, FunctionsError } from "firebase/functions";
-import { functions } from "./firebase";
+import { getAI, getGenerativeModel, GoogleAIBackend, ResponseModality } from "firebase/ai";
+import { app } from "./firebase";
 import { ImageManager } from "./ImageManager";
 import { generateId } from "./utils";
 
-// All Gemini calls go through Cloud Functions (see /functions). The API key
-// lives only on the server, so it is never shipped inside the app bundle.
+// Gemini is called through Firebase AI Logic (Gemini Developer API backend).
+// The API key is held by Firebase on the server side, so it is never shipped
+// inside the app bundle. Per-user rate limits are configured in the Firebase
+// console (AI Logic > Settings); App Check can be enforced there too.
+const ai = getAI(app, { backend: new GoogleAIBackend() });
+
+const textModel = getGenerativeModel(ai, {
+  model: "gemini-2.5-flash",
+  generationConfig: { responseMimeType: "application/json" },
+});
+
+const imageModel = getGenerativeModel(ai, {
+  model: "gemini-2.5-flash-image",
+  generationConfig: { responseModalities: [ResponseModality.TEXT, ResponseModality.IMAGE] },
+});
 
 export interface WarriorStats {
   hp: number;
@@ -85,35 +98,112 @@ export function assignPassive(warriorClass: string, element: string): PassiveAbi
   return PASSIVES.PRECISION;
 }
 
-type AIMetadata = Omit<WarriorData, 'id' | 'imageUrl' | 'passive'>;
+const SCAN_PROMPT = `
+    Analise esta imagem. Identifique o objeto principal, sua cor, material e utilidade.
+    IMPORTANTE: Analise também a POSE e a EXPRESSÃO (ex: língua para fora, braços cruzados, sorrindo) do sujeito/objeto na foto.
 
-const scanWarriorFn = httpsCallable<{ image: string }, AIMetadata>(functions, 'scanWarrior');
-const fuseWarriorsFn = httpsCallable<{ w1: unknown; w2: unknown; isPremium: boolean }, AIMetadata>(functions, 'fuseWarriors');
-const generateImageFn = httpsCallable<{ visualPrompt: string; image?: string; style: WarriorStyle }, { imageUrl: string }>(functions, 'generateWarriorImage');
+    Com base nisso, crie um personagem guerreiro RPG "Nano Verse".
+    
+    Regras de Criação:
+    - Se a imagem contiver violência explícita, material explícito adulto ou inapropriado para a loja de aplicações, RECUSE e retorne estritamente: { "error": "unsafe" }
+    - Se for uma PESSOA -> Crie um Guerreiro Humanoide (Cyberpunk, Ninja, Mago, etc).
+    - Se for um ANIMAL -> Crie uma Besta Mutante ou Mascote de Combate feroz.
+    - Se for um OBJETO inanimado (ex: garrafa, teclado, maçã) -> Crie um Monstro Senciente, Mecha ou Golem inspirado na forma e utilidade do objeto. O objeto tem de ganhar vida!
+    - Seja criativo com o nome e a classe.
 
-/** Maps server errors to the error codes the UI already understands. */
+    Regras de Raridade (baseado na complexidade/unicidade do objeto):
+    - Common (60%): Objetos simples, cotidianos (caneta, garrafa, pedra). Stats totais ~200.
+    - Rare (30%): Objetos com algum detalhe interessante ou marca. Stats totais ~250.
+    - Epic (9%): Objetos complexos, eletrônicos, artísticos. Stats totais ~300.
+    - Legendary (1%): Objetos muito únicos, raros ou com valor sentimental aparente. Stats totais ~380.
+    
+    Retorne APENAS um objeto JSON com a seguinte estrutura (sem markdown):
+    {
+      "name": "Nome do Guerreiro",
+      "class": "Classe (ex: Tecnomago de Longo Alcance)",
+      "element": "Elemento (ex: Elétrico, Fogo, Planta)",
+      "rarity": "Common" | "Rare" | "Epic" | "Legendary",
+      "description": "Uma breve descrição da personalidade e origem.",
+      "visualPrompt": "Personagem estilo MANGA PUNK / GRAFFITI, traços grossos de nanquim, sombras duras. Se a foto original era de um OBJETO, este deve agora ser um monstro/robô vivo com braços, pernas ou rosto, mas cuja estrutura base lembre o objeto original! Se era uma PESSOA ou ANIMAL, mantenha a pose/posição, mas com roupagem/armadura Gachi agressiva.",
+      "originalObject": "Nome do objeto identificado",
+      "stats": {
+        "hp": 100,
+        "atk": 50,
+        "def": 50,
+        "spd": 50
+      }
+    }
+  `;
+
+type AIMetadata = Omit<WarriorData, 'id' | 'imageUrl' | 'passive'> & { error?: string };
+
+/** Maps SDK errors to the error codes the UI already understands. */
 function mapAIError(error: unknown): Error {
-  const code = (error as FunctionsError)?.code;
-  const message = (error as Error)?.message;
-  if (code === 'functions/failed-precondition' && message === 'UNSAFE_CONTENT') return new Error('UNSAFE_CONTENT');
-  if (code === 'functions/resource-exhausted') return new Error('AI_QUOTA_EXCEEDED');
-  return error instanceof Error ? error : new Error(String(error));
+  const msg = String((error as Error)?.message ?? error);
+  if (msg === 'UNSAFE_CONTENT') return new Error('UNSAFE_CONTENT');
+  if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return new Error('AI_QUOTA_EXCEEDED');
+  return error instanceof Error ? error : new Error(msg);
 }
 
-const fusionInput = (w: WarriorData) => ({
-  name: w.name,
-  class: w.class,
-  element: w.element,
-  description: w.description,
-  visualPrompt: w.visualPrompt,
-});
+function parseJson(text: string): AIMetadata {
+  if (!text) throw new Error("No response from AI");
+  return JSON.parse(text.replace(/```json\n?|\n?```/g, "").trim());
+}
+
+const RARITIES: WarriorData['rarity'][] = ['Common', 'Rare', 'Epic', 'Legendary'];
+/** Upper bound for hp+atk+def+spd of a freshly scanned warrior, per rarity. */
+const SCAN_STAT_CAP: Record<WarriorData['rarity'], number> = { Common: 230, Rare: 290, Epic: 350, Legendary: 440 };
+const clip = (v: unknown, max: number) => String(v ?? '').slice(0, max);
+
+/**
+ * Normalises what the model returned so a misbehaving model (or a prompt
+ * injection in a fused warrior's text) can't mint absurd stats or rarities.
+ */
+export function sanitizeWarrior(raw: AIMetadata, opts: { fusion?: boolean; premium?: boolean } = {}): AIMetadata {
+  if (!raw || typeof raw !== 'object' || !raw.stats) throw new Error("AI response missing warrior fields");
+  let rarity = RARITIES.includes(raw.rarity) ? raw.rarity : 'Common';
+  if (opts.premium && RARITIES.indexOf(rarity) < RARITIES.indexOf('Epic')) rarity = 'Epic';
+
+  const num = (v: unknown) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), 400) : 50;
+  };
+  const stats = { hp: num(raw.stats.hp), atk: num(raw.stats.atk), def: num(raw.stats.def), spd: num(raw.stats.spd) };
+  const cap = Math.round(SCAN_STAT_CAP[rarity] * (opts.premium ? 1.45 : opts.fusion ? 1.25 : 1));
+  const total = stats.hp + stats.atk + stats.def + stats.spd;
+  if (total > cap) {
+    const k = cap / total;
+    stats.hp = Math.max(1, Math.floor(stats.hp * k));
+    stats.atk = Math.max(1, Math.floor(stats.atk * k));
+    stats.def = Math.max(1, Math.floor(stats.def * k));
+    stats.spd = Math.max(1, Math.floor(stats.spd * k));
+  }
+
+  return {
+    name: clip(raw.name, 60) || 'Nano Warrior',
+    class: clip(raw.class, 80) || 'Guerreiro',
+    element: clip(raw.element, 40) || 'Neutro',
+    rarity,
+    description: clip(raw.description, 800),
+    visualPrompt: clip(raw.visualPrompt, 2000),
+    originalObject: clip(raw.originalObject, 80),
+    stats,
+  };
+}
 
 /**
  * Analyzes an image and generates warrior metadata.
  */
 export async function analyzeAndCreateWarrior(base64Image: string): Promise<WarriorData> {
   try {
-    const { data } = await scanWarriorFn({ image: base64Image });
+    const result = await textModel.generateContent([
+      { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+      { text: SCAN_PROMPT },
+    ]);
+    const raw = parseJson(result.response.text());
+    if (raw.error === "unsafe") throw new Error("UNSAFE_CONTENT");
+    const data = sanitizeWarrior(raw);
+
     return {
       ...data,
       id: generateId(),
@@ -132,13 +222,35 @@ export type WarriorStyle = 'Default' | 'Glitch' | 'Neon' | 'Cyber' | 'Dark' | 'R
  * Generates the visual avatar for the warrior.
  */
 export async function generateWarriorImage(visualPrompt: string, base64Image?: string, style: WarriorStyle = 'Default'): Promise<string> {
+  let stylePrompt = "";
+  switch(style) {
+    case 'Glitch': stylePrompt = "Estilo GLITCH ART, distorção digital, datamosh, falhas visuais, cores RGB separadas, ruído estático."; break;
+    case 'Neon': stylePrompt = "Estilo NEON NOIR, luzes brilhantes, contraste alto, ciano e magenta, brilho intenso, atmosfera noturna."; break;
+    case 'Cyber': stylePrompt = "Estilo CYBERPUNK, circuitos, metal cromado, implantes tecnológicos, HUD futurista, fios e cabos."; break;
+    case 'Dark': stylePrompt = "Estilo DARK FANTASY, sombras profundas, atmosfera gótica, cores desaturadas, visual ameaçador, fumaça."; break;
+    case 'Retro': stylePrompt = "Estilo RETRO 80s ANIME, cores pastéis, granulado de filme, estética VHS, lo-fi."; break;
+    default: stylePrompt = "Estilo MANGA CARTOON GACHA PUNK / GRAFFITI ART. Ilustração 2D pura. Traços pretos grossos (ink outlines). Sombras cel-shading duro. PROIBIDO FOTOREALISMO."; break;
+  }
+
   try {
-    const { data } = await generateImageFn({ visualPrompt, image: base64Image, style });
+    const enhancedPrompt = `[CRITICAL: DO NOT GENERATE PHOTOREALISM. MUST BE A 2D ILLUSTRATION ONLY] Transforme a foto original completamente num DESENHO. ${visualPrompt} ${stylePrompt} Cores vibrantes e saturadas de banda desenhada/anime. Desenhe o formato em estilo Cartoon 2D, substituindo texturas reais por tinta lisa. A imagem deve manter a forma mas parecer desenhada à mão!`;
+
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: enhancedPrompt }];
+    // If we have the original image, use it as a reference for the pose/structure
+    if (base64Image) {
+      parts.unshift({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
+    }
+
+    const result = await imageModel.generateContent(parts);
+    const image = result.response.inlineDataParts()?.find(p => p.inlineData?.data);
+    if (!image) throw new Error("No image data found in response");
+
+    const fullBase64 = `data:${image.inlineData.mimeType || 'image/png'};base64,${image.inlineData.data}`;
     try {
-      return await ImageManager.optimizeForStorage(data.imageUrl);
+      return await ImageManager.optimizeForStorage(fullBase64);
     } catch (e) {
       console.warn("Optimization failed, returning original", e);
-      return data.imageUrl;
+      return fullBase64;
     }
   } catch (error) {
     console.error("Error generating warrior image:", error);
@@ -149,8 +261,38 @@ export async function generateWarriorImage(visualPrompt: string, base64Image?: s
 }
 
 export async function fuseWarriors(w1: WarriorData, w2: WarriorData, isPremium: boolean = false): Promise<WarriorData> {
+  const prompt = `
+    FUSÃO DE GUERREIROS:
+    Guerreiro 1: ${w1.name} (${w1.class}, ${w1.element}). Descrição: ${w1.description}. Visual: ${w1.visualPrompt}
+    Guerreiro 2: ${w2.name} (${w2.class}, ${w2.element}). Descrição: ${w2.description}. Visual: ${w2.visualPrompt}
+    
+    Crie um NOVO guerreiro que seja uma FUSÃO destes dois.
+    - O nome deve ser uma combinação criativa.
+    - A classe deve ser híbrida.
+    - O elemento deve ser uma mistura ou o mais forte dos dois.
+    - A raridade deve ser a maior entre os dois, ou uma acima se forem iguais. (Valores permitidos: "Common", "Rare", "Epic", "Legendary")
+    - A descrição deve explicar a fusão.
+    - O visualPrompt deve combinar as características visuais de ambos.
+    ${isPremium ? '- ESTA É UMA FUSÃO PREMIUM: Garanta que a raridade seja pelo menos EPIC ou LEGENDARY. Os stats devem ter um bônus maior (25-40%).' : ''}
+    
+    Retorne APENAS um objeto JSON com a seguinte estrutura (sem markdown):
+    {
+      "name": "Nome da Fusão",
+      "class": "Classe Híbrida",
+      "element": "Elemento Híbrido",
+      "rarity": "Common" | "Rare" | "Epic" | "Legendary",
+      "description": "Descrição",
+      "visualPrompt": "Prompt visual combinado",
+      "stats": { "hp": number, "atk": number, "def": number, "spd": number }
+    }
+    
+    Para os stats, faça uma média ponderada dos dois guerreiros e adicione um bônus de ${isPremium ? '25-40%' : '10-20%'}.
+  `;
+
   try {
-    const { data } = await fuseWarriorsFn({ w1: fusionInput(w1), w2: fusionInput(w2), isPremium });
+    const result = await textModel.generateContent(prompt);
+    const data = sanitizeWarrior(parseJson(result.response.text()), { fusion: true, premium: isPremium });
+
     return {
       ...data,
       id: generateId(),

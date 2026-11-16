@@ -15,7 +15,6 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
-import { getFunctions } from 'firebase/functions';
 import {
   getFirestore,
   collection,
@@ -47,7 +46,6 @@ import firebaseConfig from '../../firebase-applet-config.json';
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-export const functions = getFunctions(app);
 
 // Types
 export interface UserProfile {
