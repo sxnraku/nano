@@ -382,6 +382,12 @@ export default function App() {
           ...prev,
           scanEnergy: prev.scanEnergy + 1
         }));
+      } else if (error?.message === "AI_QUOTA_EXCEEDED") {
+        addToast(t.toast_ai_quota_exceeded, "error");
+        setPlayerStats(prev => ({
+          ...prev,
+          scanEnergy: prev.scanEnergy + 1
+        }));
       } else {
         addToast(t.toast_gen_failed, "error");
         // Refund Energy on generic generation fail to be fair

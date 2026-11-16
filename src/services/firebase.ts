@@ -15,6 +15,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
+import { getFunctions } from 'firebase/functions';
 import {
   getFirestore,
   collection,
@@ -43,9 +44,10 @@ import { compressImage } from './imageUtils';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase SDK
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const functions = getFunctions(app);
 
 // Types
 export interface UserProfile {
